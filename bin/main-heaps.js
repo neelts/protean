@@ -7,6 +7,14 @@ function $extend(from, fields) {
 	if( fields.toString !== Object.prototype.toString ) proto.toString = fields.toString;
 	return proto;
 }
+var EReg = function(r,opt) {
+	this.r = new RegExp(r,opt.split("u").join(""));
+};
+$hxClasses["EReg"] = EReg;
+EReg.__name__ = true;
+EReg.prototype = {
+	__class__: EReg
+};
 var Global = function() { };
 $hxClasses["Global"] = Global;
 Global.__name__ = true;
@@ -463,6 +471,9 @@ h2d_Sprite.prototype = {
 			return b;
 		}
 		this.visible = b;
+		if(this.parentContainer != null) {
+			this.parentContainer.contentChanged(this);
+		}
 		return b;
 	}
 	,addChild: function(s) {
@@ -501,6 +512,9 @@ h2d_Sprite.prototype = {
 			} else {
 				s.onParentChangedRec();
 			}
+		}
+		if(this.parentContainer != null) {
+			this.parentContainer.contentChanged(this);
 		}
 	}
 	,onParentChangedRec: function() {
@@ -545,6 +559,9 @@ h2d_Sprite.prototype = {
 				s.setParentContainer(null);
 			}
 			s.posChanged = true;
+			if(this.parentContainer != null) {
+				this.parentContainer.contentChanged(this);
+			}
 		}
 	}
 	,setParentContainer: function(c) {
@@ -1049,6 +1066,8 @@ h2d_Sprite.prototype = {
 		this.posChanged = true;
 		return this.rotation = v;
 	}
+	,contentChanged: function(s) {
+	}
 	,__class__: h2d_Sprite
 };
 var display_PDisplayObject = function() { };
@@ -1068,30 +1087,35 @@ display_PContainer.prototype = $extend(h2d_Sprite.prototype,{
 	__class__: display_PContainer
 });
 var PApplication = function(settings) {
-	var _gthis = this;
 	display_PContainer.call(this);
 	this.canvas = window.document.createElement("canvas");
 	this.canvas.id = "webgl";
 	settings.parentDOM.appendChild(this.canvas);
-	window.onresize = $bind(this,this.onResize);
-	this.onResize();
-	hxd_System.start(function() {
-		_gthis.app = new PApp($bind(_gthis,_gthis.init));
-	});
+	hxd_System.start($bind(this,this.started));
 };
 $hxClasses["PApplication"] = PApplication;
 PApplication.__name__ = true;
 PApplication.__super__ = display_PContainer;
 PApplication.prototype = $extend(display_PContainer.prototype,{
-	init: function() {
+	started: function() {
+		hxd_Res.set_loader(new hxd_res_Loader(new hxd_fs_EmbedFileSystem(haxe_Unserializer.run("oy8:test.pngtg"))));
+		this.app = new PApp($bind(this,this.init));
+	}
+	,init: function() {
+		this.app.engine.autoResize = false;
 		this.app.s2d.addChild(this);
+		window.onresize = $bind(this,this.onResize);
+		this.onResize();
 		this.onReady();
 	}
 	,onReady: function() {
 	}
 	,onResize: function() {
-		this.canvas.style.width = this.canvas.parentElement.clientWidth + "px";
-		this.canvas.style.height = this.canvas.parentElement.clientHeight + "px";
+		var width = this.canvas.parentElement.clientWidth;
+		var height = this.canvas.parentElement.clientHeight;
+		this.canvas.style.width = width + "px";
+		this.canvas.style.height = height + "px";
+		this.app.engine.resize(width,height);
 	}
 	,__class__: PApplication
 });
@@ -1166,7 +1190,7 @@ hxd_App.prototype = {
 };
 var PApp = function(inits) {
 	this.inits = inits;
-	hxd_App.call(this,new PEngine());
+	hxd_App.call(this);
 };
 $hxClasses["PApp"] = PApp;
 PApp.__name__ = true;
@@ -1178,310 +1202,9 @@ PApp.prototype = $extend(hxd_App.prototype,{
 	}
 	,__class__: PApp
 });
-var h3d_Engine = function(hardware,aa) {
-	if(aa == null) {
-		aa = 0;
-	}
-	if(hardware == null) {
-		hardware = true;
-	}
-	this.tmpVector = new h3d_Vector();
-	this.frameCount = 0;
-	this.backgroundColor = -16777216;
-	this.hardware = hardware;
-	this.antiAlias = aa;
-	this.autoResize = true;
-	this.set_fullScreen(!hxd_System.get_isWindowed());
-	var stage = hxd_Stage.getInstance();
-	this.realFps = hxd_System.getDefaultFrameRate();
-	this.lastTime = new Date().getTime() / 1000;
-	stage.addResizeEvent($bind(this,this.onStageResize));
-	this.driver = new h3d_impl_GlDriver();
-	h3d_Engine.CURRENT = this;
-};
-$hxClasses["h3d.Engine"] = h3d_Engine;
-h3d_Engine.__name__ = true;
-h3d_Engine.prototype = {
-	init: function() {
-		this.driver.init($bind(this,this.onCreate),!this.hardware);
-	}
-	,selectShader: function(shader) {
-		if(this.needFlushTarget) {
-			this.doFlushTarget();
-		}
-		if(this.driver.selectShader(shader)) {
-			this.shaderSwitches++;
-		}
-	}
-	,selectMaterial: function(pass) {
-		this.driver.selectMaterial(pass);
-	}
-	,uploadShaderBuffers: function(buffers,which) {
-		this.driver.uploadShaderBuffers(buffers,which);
-	}
-	,selectBuffer: function(buf) {
-		if(buf.isDisposed()) {
-			return false;
-		}
-		if(this.needFlushTarget) {
-			this.doFlushTarget();
-		}
-		this.driver.selectBuffer(buf);
-		return true;
-	}
-	,renderBuffer: function(b,indexes,vertPerTri,startTri,drawTri) {
-		if(drawTri == null) {
-			drawTri = -1;
-		}
-		if(startTri == null) {
-			startTri = 0;
-		}
-		if(indexes.isDisposed()) {
-			return;
-		}
-		while(true) {
-			var ntri = b.vertices / vertPerTri | 0;
-			var pos = b.position / vertPerTri | 0;
-			if(startTri > 0) {
-				if(startTri >= ntri) {
-					startTri -= ntri;
-					b = b.next;
-					if(!(b != null)) {
-						break;
-					} else {
-						continue;
-					}
-				}
-				pos += startTri;
-				ntri -= startTri;
-				startTri = 0;
-			}
-			if(drawTri >= 0) {
-				if(drawTri == 0) {
-					return;
-				}
-				drawTri -= ntri;
-				if(drawTri < 0) {
-					ntri += drawTri;
-					drawTri = 0;
-				}
-			}
-			if(ntri > 0 && this.selectBuffer(b)) {
-				this.driver.draw(indexes.ibuf,pos * 3,ntri);
-				this.drawTriangles += ntri;
-				this.drawCalls++;
-			}
-			b = b.next;
-			if(!(b != null)) {
-				break;
-			}
-		}
-	}
-	,renderIndexed: function(b,indexes,startTri,drawTri) {
-		if(drawTri == null) {
-			drawTri = -1;
-		}
-		if(startTri == null) {
-			startTri = 0;
-		}
-		if(b.next != null) {
-			throw new js__$Boot_HaxeError("Buffer is split");
-		}
-		if(indexes.isDisposed()) {
-			return;
-		}
-		if(drawTri < 0) {
-			drawTri = (indexes.count / 3 | 0) - startTri;
-		}
-		if(drawTri > 0 && this.selectBuffer(b)) {
-			this.driver.draw(indexes.ibuf,startTri * 3,drawTri);
-			this.drawTriangles += drawTri;
-			this.drawCalls++;
-		}
-	}
-	,set_debug: function(d) {
-		this.debug = d;
-		this.driver.setDebug(this.debug);
-		return d;
-	}
-	,onCreate: function(disposed) {
-		if(this.autoResize) {
-			var stage = hxd_Stage.getInstance();
-			this.width = stage.get_width();
-			this.height = stage.get_height();
-		}
-		if(disposed) {
-			this.mem.onContextLost();
-		} else {
-			this.mem = new h3d_impl_MemoryManager(this.driver);
-			this.mem.init();
-		}
-		this.hardware = this.driver.hasFeature(h3d_impl_Feature.HardwareAccelerated);
-		this.set_debug(this.debug);
-		this.set_fullScreen(this.fullScreen);
-		this.resize(this.width,this.height);
-		if(disposed) {
-			this.onContextLost();
-		} else {
-			this.onReady();
-		}
-	}
-	,onContextLost: function() {
-	}
-	,onReady: function() {
-	}
-	,onStageResize: function() {
-		if(this.autoResize && !this.driver.isDisposed()) {
-			var stage = hxd_Stage.getInstance();
-			var w = stage.get_width();
-			var h = stage.get_height();
-			if(w != this.width || h != this.height) {
-				this.resize(w,h);
-			}
-			this.onResized();
-		}
-	}
-	,set_fullScreen: function(v) {
-		this.fullScreen = v;
-		if(this.mem != null && hxd_System.get_isWindowed()) {
-			hxd_Stage.getInstance();
-		}
-		return v;
-	}
-	,onResized: function() {
-	}
-	,resize: function(width,height) {
-		if(width < 32) {
-			width = 32;
-		}
-		if(height < 32) {
-			height = 32;
-		}
-		this.width = width;
-		this.height = height;
-		if(!this.driver.isDisposed()) {
-			this.driver.resize(width,height);
-		}
-	}
-	,begin: function() {
-		if(this.driver.isDisposed()) {
-			return false;
-		}
-		this.frameCount++;
-		this.drawTriangles = 0;
-		this.shaderSwitches = 0;
-		this.drawCalls = 0;
-		this.targetStack = null;
-		this.needFlushTarget = this.currentTarget != null;
-		this.driver.begin(this.frameCount);
-		if(this.backgroundColor != null) {
-			this.clear(this.backgroundColor,1,0);
-		}
-		return true;
-	}
-	,end: function() {
-	}
-	,getCurrentTarget: function() {
-		if(this.targetStack == null) {
-			return null;
-		} else {
-			return this.targetStack.t;
-		}
-	}
-	,pushTarget: function(tex) {
-		var c = this.targetTmp;
-		if(c == null) {
-			c = new h3d__$Engine_TargetTmp(tex,this.targetStack);
-		} else {
-			this.targetTmp = c.next;
-			c.t = tex;
-			c.next = this.targetStack;
-		}
-		this.targetStack = c;
-		this.needFlushTarget = this.currentTarget != tex;
-	}
-	,popTarget: function() {
-		var c = this.targetStack;
-		if(c == null) {
-			throw new js__$Boot_HaxeError("popTarget() with no matching pushTarget()");
-		}
-		this.targetStack = c.next;
-		this.needFlushTarget = this.currentTarget != (this.targetStack == null ? null : this.targetStack.t);
-		c.t = null;
-		c.next = this.targetTmp;
-		this.targetTmp = c;
-	}
-	,doFlushTarget: function() {
-		var tex = this.targetStack == null ? null : this.targetStack.t;
-		this.currentTarget = tex;
-		this.driver.setRenderTarget(tex);
-		this.needFlushTarget = false;
-	}
-	,clear: function(color,depth,stencil) {
-		if(color != null) {
-			var _this = this.tmpVector;
-			_this.x = (color >> 16 & 255) * 0.00392156862745098;
-			_this.y = (color >> 8 & 255) * 0.00392156862745098;
-			_this.z = (color & 255) * 0.00392156862745098;
-			_this.w = (color >>> 24) * 0.00392156862745098;
-		}
-		if(this.needFlushTarget) {
-			this.doFlushTarget();
-		}
-		this.driver.clear(color == null ? null : this.tmpVector,depth,stencil);
-	}
-	,setRenderZone: function(x,y,width,height) {
-		if(height == null) {
-			height = -1;
-		}
-		if(width == null) {
-			width = -1;
-		}
-		if(y == null) {
-			y = 0;
-		}
-		if(x == null) {
-			x = 0;
-		}
-		this.driver.setRenderZone(x,y,width,height);
-	}
-	,render: function(obj) {
-		if(!this.begin()) {
-			return false;
-		}
-		obj.render(this);
-		this.end();
-		var delta = new Date().getTime() / 1000 - this.lastTime;
-		this.lastTime += delta;
-		if(delta > 0) {
-			var curFps = 1. / delta;
-			if(curFps > this.realFps * 2) {
-				curFps = this.realFps * 2;
-			} else if(curFps < this.realFps * 0.5) {
-				curFps = this.realFps * 0.5;
-			}
-			var f = delta / .5;
-			if(f > 0.3) {
-				f = 0.3;
-			}
-			this.realFps = this.realFps * (1 - f) + curFps * f;
-		}
-		return true;
-	}
-	,__class__: h3d_Engine
-};
-var PEngine = function() {
-	h3d_Engine.call(this);
-};
-$hxClasses["PEngine"] = PEngine;
-PEngine.__name__ = true;
-PEngine.__super__ = h3d_Engine;
-PEngine.prototype = $extend(h3d_Engine.prototype,{
-	resize: function(width,height) {
-		h3d_Engine.prototype.resize.call(this,width,height);
-	}
-	,__class__: PEngine
-});
+var Protean = function() { };
+$hxClasses["Protean"] = Protean;
+Protean.__name__ = true;
 var Reflect = function() { };
 $hxClasses["Reflect"] = Reflect;
 Reflect.__name__ = true;
@@ -1586,6 +1309,20 @@ StringTools.rtrim = function(s) {
 StringTools.trim = function(s) {
 	return StringTools.ltrim(StringTools.rtrim(s));
 };
+StringTools.hex = function(n,digits) {
+	var s = "";
+	while(true) {
+		s = "0123456789ABCDEF".charAt(n & 15) + s;
+		n >>>= 4;
+		if(!(n > 0)) {
+			break;
+		}
+	}
+	if(digits != null) {
+		while(s.length < digits) s = "0" + s;
+	}
+	return s;
+};
 var protean_Application = function(options) {
 	PApplication.call(this,options);
 };
@@ -1596,7 +1333,7 @@ protean_Application.prototype = $extend(PApplication.prototype,{
 	__class__: protean_Application
 });
 var Test = function() {
-	protean_Application.call(this,{ parentDOM : window.document.getElementById(Global.id), backgroundColor : 0});
+	protean_Application.call(this,{ parentDOM : window.document.getElementById(Protean.id), backgroundColor : 0});
 };
 $hxClasses["Test"] = Test;
 Test.__name__ = true;
@@ -1620,9 +1357,14 @@ Test.prototype = $extend(protean_Application.prototype,{
 		object.set_rotation(Math.PI / 4);
 		this.addChild(object);
 		haxe_Timer.delay($bind(this,this.moves),1000);
+		this.i = new protean_display_Image("test.png");
+		var object1 = this.i;
+		object1.set_x(300);
+		object1.set_y(20);
+		this.addChild(object1);
 	}
 	,moves: function() {
-		haxe_Log.trace(Global.id,{ fileName : "Test.hx", lineNumber : 33, className : "Test", methodName : "moves"});
+		haxe_Log.trace(Global.id,{ fileName : "Test.hx", lineNumber : 36, className : "Test", methodName : "moves"});
 		this.s.set_x(100);
 	}
 	,__class__: Test
@@ -1708,6 +1450,35 @@ h2d_Drawable.prototype = $extend(h2d_Sprite.prototype,{
 		return;
 	}
 	,__class__: h2d_Drawable
+});
+var h2d_Bitmap = function(tile,parent) {
+	h2d_Drawable.call(this,parent);
+	this.tile = tile;
+};
+$hxClasses["h2d.Bitmap"] = h2d_Bitmap;
+h2d_Bitmap.__name__ = true;
+h2d_Bitmap.__super__ = h2d_Drawable;
+h2d_Bitmap.prototype = $extend(h2d_Drawable.prototype,{
+	getBoundsRec: function(relativeTo,out,forSize) {
+		h2d_Drawable.prototype.getBoundsRec.call(this,relativeTo,out,forSize);
+		if(this.tile != null) {
+			this.addBounds(relativeTo,out,this.tile.dx,this.tile.dy,this.tile.width,this.tile.height);
+		}
+	}
+	,draw: function(ctx) {
+		this.emitTile(ctx,this.tile);
+	}
+	,__class__: h2d_Bitmap
+});
+var display_PImage = function(path) {
+	h2d_Bitmap.call(this,hxd_res_Loader.currentInstance.load(path).toImage().toTile());
+};
+$hxClasses["display.PImage"] = display_PImage;
+display_PImage.__name__ = true;
+display_PImage.__interfaces__ = [display_PDisplayObject];
+display_PImage.__super__ = h2d_Bitmap;
+display_PImage.prototype = $extend(h2d_Bitmap.prototype,{
+	__class__: display_PImage
 });
 var h2d_Graphics = function(parent) {
 	this.bevel = 0.25;
@@ -2119,6 +1890,1289 @@ display_PShape.__super__ = h2d_Graphics;
 display_PShape.prototype = $extend(h2d_Graphics.prototype,{
 	__class__: display_PShape
 });
+var format_gif_Block = $hxClasses["format.gif.Block"] = { __ename__ : true, __constructs__ : ["BFrame","BExtension","BEOF"] };
+format_gif_Block.BFrame = function(frame) { var $x = ["BFrame",0,frame]; $x.__enum__ = format_gif_Block; $x.toString = $estr; return $x; };
+format_gif_Block.BExtension = function(extension) { var $x = ["BExtension",1,extension]; $x.__enum__ = format_gif_Block; $x.toString = $estr; return $x; };
+format_gif_Block.BEOF = ["BEOF",2];
+format_gif_Block.BEOF.toString = $estr;
+format_gif_Block.BEOF.__enum__ = format_gif_Block;
+format_gif_Block.__empty_constructs__ = [format_gif_Block.BEOF];
+var format_gif_Extension = $hxClasses["format.gif.Extension"] = { __ename__ : true, __constructs__ : ["EGraphicControl","EComment","EText","EApplicationExtension","EUnknown"] };
+format_gif_Extension.EGraphicControl = function(gce) { var $x = ["EGraphicControl",0,gce]; $x.__enum__ = format_gif_Extension; $x.toString = $estr; return $x; };
+format_gif_Extension.EComment = function(text) { var $x = ["EComment",1,text]; $x.__enum__ = format_gif_Extension; $x.toString = $estr; return $x; };
+format_gif_Extension.EText = function(pte) { var $x = ["EText",2,pte]; $x.__enum__ = format_gif_Extension; $x.toString = $estr; return $x; };
+format_gif_Extension.EApplicationExtension = function(ext) { var $x = ["EApplicationExtension",3,ext]; $x.__enum__ = format_gif_Extension; $x.toString = $estr; return $x; };
+format_gif_Extension.EUnknown = function(id,data) { var $x = ["EUnknown",4,id,data]; $x.__enum__ = format_gif_Extension; $x.toString = $estr; return $x; };
+format_gif_Extension.__empty_constructs__ = [];
+var format_gif_ApplicationExtension = $hxClasses["format.gif.ApplicationExtension"] = { __ename__ : true, __constructs__ : ["AENetscapeLooping","AEUnknown"] };
+format_gif_ApplicationExtension.AENetscapeLooping = function(loops) { var $x = ["AENetscapeLooping",0,loops]; $x.__enum__ = format_gif_ApplicationExtension; $x.toString = $estr; return $x; };
+format_gif_ApplicationExtension.AEUnknown = function(name,version,data) { var $x = ["AEUnknown",1,name,version,data]; $x.__enum__ = format_gif_ApplicationExtension; $x.toString = $estr; return $x; };
+format_gif_ApplicationExtension.__empty_constructs__ = [];
+var format_gif_Version = $hxClasses["format.gif.Version"] = { __ename__ : true, __constructs__ : ["GIF87a","GIF89a","Unknown"] };
+format_gif_Version.GIF87a = ["GIF87a",0];
+format_gif_Version.GIF87a.toString = $estr;
+format_gif_Version.GIF87a.__enum__ = format_gif_Version;
+format_gif_Version.GIF89a = ["GIF89a",1];
+format_gif_Version.GIF89a.toString = $estr;
+format_gif_Version.GIF89a.__enum__ = format_gif_Version;
+format_gif_Version.Unknown = function(version) { var $x = ["Unknown",2,version]; $x.__enum__ = format_gif_Version; $x.toString = $estr; return $x; };
+format_gif_Version.__empty_constructs__ = [format_gif_Version.GIF87a,format_gif_Version.GIF89a];
+var format_gif_DisposalMethod = $hxClasses["format.gif.DisposalMethod"] = { __ename__ : true, __constructs__ : ["UNSPECIFIED","NO_ACTION","FILL_BACKGROUND","RENDER_PREVIOUS","UNDEFINED"] };
+format_gif_DisposalMethod.UNSPECIFIED = ["UNSPECIFIED",0];
+format_gif_DisposalMethod.UNSPECIFIED.toString = $estr;
+format_gif_DisposalMethod.UNSPECIFIED.__enum__ = format_gif_DisposalMethod;
+format_gif_DisposalMethod.NO_ACTION = ["NO_ACTION",1];
+format_gif_DisposalMethod.NO_ACTION.toString = $estr;
+format_gif_DisposalMethod.NO_ACTION.__enum__ = format_gif_DisposalMethod;
+format_gif_DisposalMethod.FILL_BACKGROUND = ["FILL_BACKGROUND",2];
+format_gif_DisposalMethod.FILL_BACKGROUND.toString = $estr;
+format_gif_DisposalMethod.FILL_BACKGROUND.__enum__ = format_gif_DisposalMethod;
+format_gif_DisposalMethod.RENDER_PREVIOUS = ["RENDER_PREVIOUS",3];
+format_gif_DisposalMethod.RENDER_PREVIOUS.toString = $estr;
+format_gif_DisposalMethod.RENDER_PREVIOUS.__enum__ = format_gif_DisposalMethod;
+format_gif_DisposalMethod.UNDEFINED = function(index) { var $x = ["UNDEFINED",4,index]; $x.__enum__ = format_gif_DisposalMethod; $x.toString = $estr; return $x; };
+format_gif_DisposalMethod.__empty_constructs__ = [format_gif_DisposalMethod.UNSPECIFIED,format_gif_DisposalMethod.NO_ACTION,format_gif_DisposalMethod.FILL_BACKGROUND,format_gif_DisposalMethod.RENDER_PREVIOUS];
+var format_gif_Reader = function(i) {
+	this.i = i;
+	i.set_bigEndian(false);
+};
+$hxClasses["format.gif.Reader"] = format_gif_Reader;
+format_gif_Reader.__name__ = true;
+format_gif_Reader.prototype = {
+	read: function() {
+		var _g = 0;
+		var _g1 = [71,73,70];
+		while(_g < _g1.length) {
+			var b = _g1[_g];
+			++_g;
+			if(this.i.readByte() != b) {
+				throw new js__$Boot_HaxeError("Invalid header");
+			}
+		}
+		var gifVer = this.i.readString(3);
+		var version = format_gif_Version.GIF89a;
+		switch(gifVer) {
+		case "87a":
+			version = format_gif_Version.GIF87a;
+			break;
+		case "89a":
+			version = format_gif_Version.GIF89a;
+			break;
+		default:
+			version = format_gif_Version.Unknown(gifVer);
+		}
+		var width = this.i.readUInt16();
+		var height = this.i.readUInt16();
+		var packedField = this.i.readByte();
+		var bgIndex = this.i.readByte();
+		var pixelAspectRatio = this.i.readByte();
+		if(pixelAspectRatio != 0) {
+			pixelAspectRatio = (pixelAspectRatio + 15) / 64;
+		} else {
+			pixelAspectRatio = 1;
+		}
+		var lsd = { width : width, height : height, hasGlobalColorTable : (packedField & 128) == 128, colorResolution : (packedField & 112) >>> 4, sorted : (packedField & 8) == 8, globalColorTableSize : 2 << (packedField & 7), backgroundColorIndex : bgIndex, pixelAspectRatio : pixelAspectRatio};
+		var gct = null;
+		if(lsd.hasGlobalColorTable) {
+			gct = this.readColorTable(lsd.globalColorTableSize);
+		}
+		var blocks = new List();
+		while(true) {
+			var b1 = this.readBlock();
+			blocks.add(b1);
+			if(b1 == format_gif_Block.BEOF) {
+				break;
+			}
+		}
+		return { version : version, logicalScreenDescriptor : lsd, globalColorTable : gct, blocks : blocks};
+	}
+	,readBlock: function() {
+		switch(this.i.readByte()) {
+		case 33:
+			return this.readExtension();
+		case 44:
+			return this.readImage();
+		case 59:
+			return format_gif_Block.BEOF;
+		}
+		return format_gif_Block.BEOF;
+	}
+	,readImage: function() {
+		var x = this.i.readUInt16();
+		var y = this.i.readUInt16();
+		var width = this.i.readUInt16();
+		var height = this.i.readUInt16();
+		var packed = this.i.readByte();
+		var localColorTable = (packed & 128) == 128;
+		var interlaced = (packed & 64) == 64;
+		var localColorTableSize = 2 << (packed & 7);
+		var lct = null;
+		if(localColorTable) {
+			lct = this.readColorTable(localColorTableSize);
+		}
+		return format_gif_Block.BFrame({ x : x, y : y, width : width, height : height, localColorTable : localColorTable, interlaced : interlaced, sorted : (packed & 32) == 32, localColorTableSize : localColorTableSize, pixels : this.readPixels(width,height,interlaced), colorTable : lct});
+	}
+	,readPixels: function(width,height,interlaced) {
+		var input = this.i;
+		var pixelsCount = width * height;
+		var pixels = new haxe_io_Bytes(new ArrayBuffer(pixelsCount));
+		var minCodeSize = input.readByte();
+		var blockSize = input.readByte() - 1;
+		var bits = input.readByte();
+		var bitsCount = 8;
+		var clearCode = 1 << minCodeSize;
+		var eoiCode = clearCode + 1;
+		var codeSize = minCodeSize + 1;
+		var codeSizeLimit = 1 << codeSize;
+		var codeMask = codeSizeLimit - 1;
+		var baseDict = [];
+		var _g1 = 0;
+		while(_g1 < clearCode) {
+			var i = _g1++;
+			baseDict[i] = [i];
+		}
+		var dict = [];
+		var dictLen = clearCode + 2;
+		var newRecord;
+		var i1 = 0;
+		var code = 0;
+		var last;
+		while(i1 < pixelsCount) {
+			last = code;
+			while(bitsCount < codeSize) {
+				if(blockSize == 0) {
+					break;
+				}
+				bits |= input.readByte() << bitsCount;
+				bitsCount += 8;
+				--blockSize;
+				if(blockSize == 0) {
+					blockSize = input.readByte();
+				}
+			}
+			code = bits & codeMask;
+			bits >>= codeSize;
+			bitsCount -= codeSize;
+			if(code == clearCode) {
+				dict = baseDict.slice();
+				dictLen = clearCode + 2;
+				codeSize = minCodeSize + 1;
+				codeSizeLimit = 1 << codeSize;
+				codeMask = codeSizeLimit - 1;
+				continue;
+			}
+			if(code == eoiCode) {
+				break;
+			}
+			if(code < dictLen) {
+				if(last != clearCode) {
+					newRecord = dict[last].slice();
+					newRecord.push(dict[code][0]);
+					dict[dictLen++] = newRecord;
+				}
+			} else {
+				if(code != dictLen) {
+					throw new js__$Boot_HaxeError("Invalid LZW code. Excepted: " + dictLen + ", got: " + code);
+				}
+				newRecord = dict[last].slice();
+				newRecord.push(newRecord[0]);
+				dict[dictLen++] = newRecord;
+			}
+			newRecord = dict[code];
+			var _g = 0;
+			while(_g < newRecord.length) {
+				var item = newRecord[_g];
+				++_g;
+				pixels.b[i1++] = item & 255;
+			}
+			if(dictLen == codeSizeLimit && codeSize < 12) {
+				++codeSize;
+				codeSizeLimit = 1 << codeSize;
+				codeMask = codeSizeLimit - 1;
+			}
+		}
+		while(blockSize > 0) {
+			input.readByte();
+			--blockSize;
+			if(blockSize == 0) {
+				blockSize = input.readByte();
+			}
+		}
+		while(i1 < pixelsCount) pixels.b[i1++] = 0;
+		if(interlaced) {
+			var buffer = new haxe_io_Bytes(new ArrayBuffer(pixelsCount));
+			var offset = this.deinterlace(pixels,buffer,8,0,0,width,height);
+			offset = this.deinterlace(pixels,buffer,8,4,offset,width,height);
+			offset = this.deinterlace(pixels,buffer,4,2,offset,width,height);
+			this.deinterlace(pixels,buffer,2,1,offset,width,height);
+			pixels = buffer;
+		}
+		return pixels;
+	}
+	,deinterlace: function(input,output,step,y,offset,width,height) {
+		while(y < height) {
+			output.blit(y * width,input,offset,width);
+			offset += width;
+			y += step;
+		}
+		return offset;
+	}
+	,readExtension: function() {
+		var subId = this.i.readByte();
+		switch(subId) {
+		case 1:
+			if(this.i.readByte() != 12) {
+				throw new js__$Boot_HaxeError("Incorrect size of Plain Text Extension introducer block.");
+			}
+			var tmp = this.i.readUInt16();
+			var tmp1 = this.i.readUInt16();
+			var tmp2 = this.i.readUInt16();
+			var tmp3 = this.i.readUInt16();
+			var tmp4 = this.i.readByte();
+			var tmp5 = this.i.readByte();
+			var tmp6 = this.i.readByte();
+			var tmp7 = this.i.readByte();
+			var buffer = new haxe_io_BytesOutput();
+			var bytes = new haxe_io_Bytes(new ArrayBuffer(255));
+			var len = this.i.readByte();
+			while(len != 0) {
+				this.i.readBytes(bytes,0,len);
+				buffer.writeBytes(bytes,0,len);
+				len = this.i.readByte();
+			}
+			bytes = buffer.getBytes();
+			return format_gif_Block.BExtension(format_gif_Extension.EText({ textGridX : tmp, textGridY : tmp1, textGridWidth : tmp2, textGridHeight : tmp3, charCellWidth : tmp4, charCellHeight : tmp5, textForegroundColorIndex : tmp6, textBackgroundColorIndex : tmp7, text : bytes.toString()}));
+		case 249:
+			if(this.i.readByte() != 4) {
+				throw new js__$Boot_HaxeError("Incorrect Graphic Control Extension block size!");
+			}
+			var packed = this.i.readByte();
+			var disposalMethod;
+			switch((packed & 28) >> 2) {
+			case 0:
+				disposalMethod = format_gif_DisposalMethod.UNSPECIFIED;
+				break;
+			case 1:
+				disposalMethod = format_gif_DisposalMethod.NO_ACTION;
+				break;
+			case 2:
+				disposalMethod = format_gif_DisposalMethod.FILL_BACKGROUND;
+				break;
+			case 3:
+				disposalMethod = format_gif_DisposalMethod.RENDER_PREVIOUS;
+				break;
+			default:
+				disposalMethod = format_gif_DisposalMethod.UNDEFINED((packed & 28) >> 2);
+			}
+			var b = format_gif_Block.BExtension(format_gif_Extension.EGraphicControl({ disposalMethod : disposalMethod, userInput : (packed & 2) == 2, hasTransparentColor : (packed & 1) == 1, delay : this.i.readUInt16(), transparentIndex : this.i.readByte()}));
+			this.i.readByte();
+			return b;
+		case 254:
+			var buffer1 = new haxe_io_BytesOutput();
+			var bytes1 = new haxe_io_Bytes(new ArrayBuffer(255));
+			var len1 = this.i.readByte();
+			while(len1 != 0) {
+				this.i.readBytes(bytes1,0,len1);
+				buffer1.writeBytes(bytes1,0,len1);
+				len1 = this.i.readByte();
+			}
+			bytes1 = buffer1.getBytes();
+			return format_gif_Block.BExtension(format_gif_Extension.EComment(bytes1.toString()));
+		case 255:
+			return this.readApplicationExtension();
+		default:
+			var buffer2 = new haxe_io_BytesOutput();
+			var bytes2 = new haxe_io_Bytes(new ArrayBuffer(255));
+			var len2 = this.i.readByte();
+			while(len2 != 0) {
+				this.i.readBytes(bytes2,0,len2);
+				buffer2.writeBytes(bytes2,0,len2);
+				len2 = this.i.readByte();
+			}
+			bytes2 = buffer2.getBytes();
+			return format_gif_Block.BExtension(format_gif_Extension.EUnknown(subId,bytes2));
+		}
+	}
+	,readApplicationExtension: function() {
+		if(this.i.readByte() != 11) {
+			throw new js__$Boot_HaxeError("Incorrect size of Application Extension introducer block.");
+		}
+		var name = this.i.readString(8);
+		var version = this.i.readString(3);
+		var buffer = new haxe_io_BytesOutput();
+		var bytes = new haxe_io_Bytes(new ArrayBuffer(255));
+		var len = this.i.readByte();
+		while(len != 0) {
+			this.i.readBytes(bytes,0,len);
+			buffer.writeBytes(bytes,0,len);
+			len = this.i.readByte();
+		}
+		bytes = buffer.getBytes();
+		var data = bytes;
+		if(name == "NETSCAPE" && version == "2.0" && data.b[0] == 1) {
+			return format_gif_Block.BExtension(format_gif_Extension.EApplicationExtension(format_gif_ApplicationExtension.AENetscapeLooping(data.b[1] | data.b[2] << 8)));
+		}
+		return format_gif_Block.BExtension(format_gif_Extension.EApplicationExtension(format_gif_ApplicationExtension.AEUnknown(name,version,data)));
+	}
+	,readColorTable: function(size) {
+		size *= 3;
+		var output = new haxe_io_Bytes(new ArrayBuffer(size));
+		var c = 0;
+		while(c < size) {
+			var v = this.i.readByte();
+			output.b[c] = v & 255;
+			var v1 = this.i.readByte();
+			output.b[c + 1] = v1 & 255;
+			var v2 = this.i.readByte();
+			output.b[c + 2] = v2 & 255;
+			c += 3;
+		}
+		return output;
+	}
+	,__class__: format_gif_Reader
+};
+var format_gif_Tools = function() { };
+$hxClasses["format.gif.Tools"] = format_gif_Tools;
+format_gif_Tools.__name__ = true;
+format_gif_Tools.extractFullBGRA = function(data,frameIndex) {
+	var gce = null;
+	var frameCaret = 0;
+	var bytes = new haxe_io_Bytes(new ArrayBuffer(data.logicalScreenDescriptor.width * data.logicalScreenDescriptor.height * 4));
+	var _g_head = data.blocks.h;
+	while(_g_head != null) {
+		var val = _g_head.item;
+		_g_head = _g_head.next;
+		switch(val[1]) {
+		case 0:
+			var frame = val[2];
+			var ct = frame.localColorTable ? frame.colorTable : data.globalColorTable;
+			if(ct == null) {
+				throw new js__$Boot_HaxeError("Frame does not have a color table!");
+			}
+			var transparentIndex = gce != null && gce.hasTransparentColor ? gce.transparentIndex * 3 : -1;
+			var pixels = frame.pixels;
+			var x = 0;
+			var writeCaret = (frame.y * data.logicalScreenDescriptor.width + frame.x) * 4;
+			var lineSkip = (data.logicalScreenDescriptor.width - frame.width) * 4 + 4;
+			switch((frameCaret != frameIndex && gce != null ? gce.disposalMethod : format_gif_DisposalMethod.NO_ACTION)[1]) {
+			case 2:
+				var _g1 = 0;
+				var _g = pixels.length;
+				while(_g1 < _g) {
+					++_g1;
+					bytes.b[writeCaret] = 0;
+					bytes.b[writeCaret + 1] = 0;
+					bytes.b[writeCaret + 2] = 0;
+					bytes.b[writeCaret + 3] = 0;
+					if(++x == frame.width) {
+						x = 0;
+						writeCaret += lineSkip;
+					} else {
+						writeCaret += 4;
+					}
+				}
+				break;
+			case 3:
+				break;
+			default:
+				var _g11 = 0;
+				var _g2 = pixels.length;
+				while(_g11 < _g2) {
+					var index = pixels.b[_g11++] * 3;
+					if(transparentIndex != index) {
+						bytes.b[writeCaret] = ct.b[index + 2] & 255;
+						bytes.b[writeCaret + 1] = ct.b[index + 1] & 255;
+						bytes.b[writeCaret + 2] = ct.b[index] & 255;
+						bytes.b[writeCaret + 3] = 255;
+					}
+					if(++x == frame.width) {
+						x = 0;
+						writeCaret += lineSkip;
+					} else {
+						writeCaret += 4;
+					}
+				}
+			}
+			if(frameCaret == frameIndex) {
+				return bytes;
+			}
+			++frameCaret;
+			gce = null;
+			break;
+		case 1:
+			var ext = val[2];
+			if(ext[1] == 0) {
+				gce = ext[2];
+			}
+			break;
+		default:
+		}
+	}
+	return bytes;
+};
+var format_png_Color = $hxClasses["format.png.Color"] = { __ename__ : true, __constructs__ : ["ColGrey","ColTrue","ColIndexed"] };
+format_png_Color.ColGrey = function(alpha) { var $x = ["ColGrey",0,alpha]; $x.__enum__ = format_png_Color; $x.toString = $estr; return $x; };
+format_png_Color.ColTrue = function(alpha) { var $x = ["ColTrue",1,alpha]; $x.__enum__ = format_png_Color; $x.toString = $estr; return $x; };
+format_png_Color.ColIndexed = ["ColIndexed",2];
+format_png_Color.ColIndexed.toString = $estr;
+format_png_Color.ColIndexed.__enum__ = format_png_Color;
+format_png_Color.__empty_constructs__ = [format_png_Color.ColIndexed];
+var format_png_Chunk = $hxClasses["format.png.Chunk"] = { __ename__ : true, __constructs__ : ["CEnd","CHeader","CData","CPalette","CUnknown"] };
+format_png_Chunk.CEnd = ["CEnd",0];
+format_png_Chunk.CEnd.toString = $estr;
+format_png_Chunk.CEnd.__enum__ = format_png_Chunk;
+format_png_Chunk.CHeader = function(h) { var $x = ["CHeader",1,h]; $x.__enum__ = format_png_Chunk; $x.toString = $estr; return $x; };
+format_png_Chunk.CData = function(b) { var $x = ["CData",2,b]; $x.__enum__ = format_png_Chunk; $x.toString = $estr; return $x; };
+format_png_Chunk.CPalette = function(b) { var $x = ["CPalette",3,b]; $x.__enum__ = format_png_Chunk; $x.toString = $estr; return $x; };
+format_png_Chunk.CUnknown = function(id,data) { var $x = ["CUnknown",4,id,data]; $x.__enum__ = format_png_Chunk; $x.toString = $estr; return $x; };
+format_png_Chunk.__empty_constructs__ = [format_png_Chunk.CEnd];
+var format_png_Reader = function(i) {
+	this.i = i;
+	i.set_bigEndian(true);
+	this.checkCRC = true;
+};
+$hxClasses["format.png.Reader"] = format_png_Reader;
+format_png_Reader.__name__ = true;
+format_png_Reader.prototype = {
+	read: function() {
+		var _g = 0;
+		var _g1 = [137,80,78,71,13,10,26,10];
+		while(_g < _g1.length) {
+			var b = _g1[_g];
+			++_g;
+			if(this.i.readByte() != b) {
+				throw new js__$Boot_HaxeError("Invalid header");
+			}
+		}
+		var l = new List();
+		while(true) {
+			var c = this.readChunk();
+			l.add(c);
+			if(c == format_png_Chunk.CEnd) {
+				break;
+			}
+		}
+		return l;
+	}
+	,readHeader: function(i) {
+		i.set_bigEndian(true);
+		var width = i.readInt32();
+		var height = i.readInt32();
+		var colbits = i.readByte();
+		var color = i.readByte();
+		var color1;
+		switch(color) {
+		case 0:
+			color1 = format_png_Color.ColGrey(false);
+			break;
+		case 2:
+			color1 = format_png_Color.ColTrue(false);
+			break;
+		case 3:
+			color1 = format_png_Color.ColIndexed;
+			break;
+		case 4:
+			color1 = format_png_Color.ColGrey(true);
+			break;
+		case 6:
+			color1 = format_png_Color.ColTrue(true);
+			break;
+		default:
+			throw new js__$Boot_HaxeError("Unknown color model " + color + ":" + colbits);
+		}
+		var compress = i.readByte();
+		var filter = i.readByte();
+		if(compress != 0 || filter != 0) {
+			throw new js__$Boot_HaxeError("Invalid header");
+		}
+		var interlace = i.readByte();
+		if(interlace != 0 && interlace != 1) {
+			throw new js__$Boot_HaxeError("Invalid header");
+		}
+		return { width : width, height : height, colbits : colbits, color : color1, interlaced : interlace == 1};
+	}
+	,readChunk: function() {
+		var dataLen = this.i.readInt32();
+		var id = this.i.readString(4);
+		var data = this.i.read(dataLen);
+		var crc = this.i.readInt32();
+		if(this.checkCRC) {
+			var c = new haxe_crypto_Crc32();
+			var _g = 0;
+			while(_g < 4) c["byte"](HxOverrides.cca(id,_g++));
+			c.update(data,0,data.length);
+			if(c.get() != crc) {
+				throw new js__$Boot_HaxeError("CRC check failure");
+			}
+		}
+		switch(id) {
+		case "IDAT":
+			return format_png_Chunk.CData(data);
+		case "IEND":
+			return format_png_Chunk.CEnd;
+		case "IHDR":
+			return format_png_Chunk.CHeader(this.readHeader(new haxe_io_BytesInput(data)));
+		case "PLTE":
+			return format_png_Chunk.CPalette(data);
+		default:
+			return format_png_Chunk.CUnknown(id,data);
+		}
+	}
+	,__class__: format_png_Reader
+};
+var format_png_Tools = function() { };
+$hxClasses["format.png.Tools"] = format_png_Tools;
+format_png_Tools.__name__ = true;
+format_png_Tools.getHeader = function(d) {
+	var _g_head = d.h;
+	while(_g_head != null) {
+		var val = _g_head.item;
+		_g_head = _g_head.next;
+		if(val[1] == 1) {
+			return val[2];
+		}
+	}
+	throw new js__$Boot_HaxeError("Header not found");
+};
+format_png_Tools.getPalette = function(d) {
+	var _g_head = d.h;
+	while(_g_head != null) {
+		var val = _g_head.item;
+		_g_head = _g_head.next;
+		if(val[1] == 3) {
+			return val[2];
+		}
+	}
+	return null;
+};
+format_png_Tools.extract32 = function(d,bytes,flipY) {
+	var h = format_png_Tools.getHeader(d);
+	var bgra = bytes == null ? new haxe_io_Bytes(new ArrayBuffer(h.width * h.height * 4)) : bytes;
+	var data = null;
+	var fullData = null;
+	var _g_head = d.h;
+	while(_g_head != null) {
+		var val = _g_head.item;
+		_g_head = _g_head.next;
+		if(val[1] == 2) {
+			var b = val[2];
+			if(fullData != null) {
+				var b2 = b.b;
+				var _g1 = 0;
+				var _g = b.length;
+				while(_g1 < _g) fullData.b.push(b2[_g1++]);
+			} else if(data == null) {
+				data = b;
+			} else {
+				fullData = new haxe_io_BytesBuffer();
+				var b21 = data.b;
+				var _g11 = 0;
+				var _g2 = data.length;
+				while(_g11 < _g2) fullData.b.push(b21[_g11++]);
+				var b22 = b.b;
+				var _g12 = 0;
+				var _g3 = b.length;
+				while(_g12 < _g3) fullData.b.push(b22[_g12++]);
+				data = null;
+			}
+		}
+	}
+	if(fullData != null) {
+		data = fullData.getBytes();
+	}
+	if(data == null) {
+		throw new js__$Boot_HaxeError("Data not found");
+	}
+	data = format_tools_Inflate.run(data);
+	var r = 0;
+	var w = 0;
+	var lineDelta = 0;
+	if(flipY) {
+		lineDelta = -h.width * 8;
+		w = (h.height - 1) * (h.width * 4);
+	}
+	var flipY1 = flipY ? -1 : 1;
+	var _g4 = h.color;
+	switch(_g4[1]) {
+	case 0:
+		var alpha = _g4[2];
+		if(h.colbits != 8) {
+			throw new js__$Boot_HaxeError("Unsupported color mode");
+		}
+		var width = h.width;
+		if(data.length < h.height * ((alpha ? 2 : 1) * width + 1)) {
+			throw new js__$Boot_HaxeError("Not enough data");
+		}
+		var alphvaIdx = -1;
+		if(!alpha) {
+			var _g_head1 = d.h;
+			while(_g_head1 != null) {
+				var val1 = _g_head1.item;
+				_g_head1 = _g_head1.next;
+				if(val1[1] == 4) {
+					if(val1[2] == "tRNS") {
+						var data1 = val1[3];
+						if(data1.length >= 2) {
+							alphvaIdx = data1.b[1];
+						}
+						break;
+					}
+				}
+			}
+		}
+		var _g13 = 0;
+		var _g5 = h.height;
+		while(_g13 < _g5) {
+			var y = _g13++;
+			var f = data.b[r++];
+			switch(f) {
+			case 0:
+				if(alpha) {
+					var _g31 = 0;
+					while(_g31 < width) {
+						++_g31;
+						var v = data.b[r++];
+						bgra.b[w++] = v & 255;
+						bgra.b[w++] = v & 255;
+						bgra.b[w++] = v & 255;
+						bgra.b[w++] = data.b[r++] & 255;
+					}
+				} else {
+					var _g32 = 0;
+					while(_g32 < width) {
+						++_g32;
+						var v1 = data.b[r++];
+						bgra.b[w++] = v1 & 255;
+						bgra.b[w++] = v1 & 255;
+						bgra.b[w++] = v1 & 255;
+						bgra.b[w++] = (v1 == alphvaIdx ? 0 : 255) & 255;
+					}
+				}
+				break;
+			case 1:
+				var cv = 0;
+				var ca = 0;
+				if(alpha) {
+					var _g33 = 0;
+					while(_g33 < width) {
+						++_g33;
+						cv += data.b[r++];
+						bgra.b[w++] = cv & 255;
+						bgra.b[w++] = cv & 255;
+						bgra.b[w++] = cv & 255;
+						ca += data.b[r++];
+						bgra.b[w++] = ca & 255;
+					}
+				} else {
+					var _g34 = 0;
+					while(_g34 < width) {
+						++_g34;
+						cv += data.b[r++];
+						bgra.b[w++] = cv & 255;
+						bgra.b[w++] = cv & 255;
+						bgra.b[w++] = cv & 255;
+						bgra.b[w++] = (cv == alphvaIdx ? 0 : 255) & 255;
+					}
+				}
+				break;
+			case 2:
+				var stride = y == 0 ? 0 : width * 4 * flipY1;
+				if(alpha) {
+					var _g35 = 0;
+					while(_g35 < width) {
+						++_g35;
+						var v2 = data.b[r++] + bgra.b[w - stride];
+						bgra.b[w++] = v2 & 255;
+						bgra.b[w++] = v2 & 255;
+						bgra.b[w++] = v2 & 255;
+						bgra.b[w++] = data.b[r++] + bgra.b[w - stride] & 255;
+					}
+				} else {
+					var _g36 = 0;
+					while(_g36 < width) {
+						++_g36;
+						var v3 = data.b[r++] + bgra.b[w - stride];
+						bgra.b[w++] = v3 & 255;
+						bgra.b[w++] = v3 & 255;
+						bgra.b[w++] = v3 & 255;
+						bgra.b[w++] = (v3 == alphvaIdx ? 0 : 255) & 255;
+					}
+				}
+				break;
+			case 3:
+				var cv1 = 0;
+				var ca1 = 0;
+				var stride1 = y == 0 ? 0 : width * 4 * flipY1;
+				if(alpha) {
+					var _g37 = 0;
+					while(_g37 < width) {
+						++_g37;
+						cv1 = data.b[r++] + (cv1 + bgra.b[w - stride1] >> 1) & 255;
+						bgra.b[w++] = cv1 & 255;
+						bgra.b[w++] = cv1 & 255;
+						bgra.b[w++] = cv1 & 255;
+						ca1 = data.b[r++] + (ca1 + bgra.b[w - stride1] >> 1) & 255;
+						bgra.b[w++] = ca1 & 255;
+					}
+				} else {
+					var _g38 = 0;
+					while(_g38 < width) {
+						++_g38;
+						cv1 = data.b[r++] + (cv1 + bgra.b[w - stride1] >> 1) & 255;
+						bgra.b[w++] = cv1 & 255;
+						bgra.b[w++] = cv1 & 255;
+						bgra.b[w++] = cv1 & 255;
+						bgra.b[w++] = (cv1 == alphvaIdx ? 0 : 255) & 255;
+					}
+				}
+				break;
+			case 4:
+				var stride2 = width * 4 * flipY1;
+				var cv2 = 0;
+				var ca2 = 0;
+				if(alpha) {
+					var _g39 = 0;
+					while(_g39 < width) {
+						var x = _g39++;
+						var b1 = y == 0 ? 0 : bgra.b[w - stride2];
+						var c = x == 0 || y == 0 ? 0 : bgra.b[w - stride2 - 4];
+						var k = cv2 + b1 - c;
+						var pa = k - cv2;
+						if(pa < 0) {
+							pa = -pa;
+						}
+						var pb = k - b1;
+						if(pb < 0) {
+							pb = -pb;
+						}
+						var pc = k - c;
+						if(pc < 0) {
+							pc = -pc;
+						}
+						cv2 = (pa <= pb && pa <= pc ? cv2 : pb <= pc ? b1 : c) + data.b[r++] & 255;
+						bgra.b[w++] = cv2 & 255;
+						bgra.b[w++] = cv2 & 255;
+						bgra.b[w++] = cv2 & 255;
+						var b3 = y == 0 ? 0 : bgra.b[w - stride2];
+						var c1 = x == 0 || y == 0 ? 0 : bgra.b[w - stride2 - 4];
+						var k1 = ca2 + b3 - c1;
+						var pa1 = k1 - ca2;
+						if(pa1 < 0) {
+							pa1 = -pa1;
+						}
+						var pb1 = k1 - b3;
+						if(pb1 < 0) {
+							pb1 = -pb1;
+						}
+						var pc1 = k1 - c1;
+						if(pc1 < 0) {
+							pc1 = -pc1;
+						}
+						ca2 = (pa1 <= pb1 && pa1 <= pc1 ? ca2 : pb1 <= pc1 ? b3 : c1) + data.b[r++] & 255;
+						bgra.b[w++] = ca2 & 255;
+					}
+				} else {
+					var _g310 = 0;
+					while(_g310 < width) {
+						var x1 = _g310++;
+						var b4 = y == 0 ? 0 : bgra.b[w - stride2];
+						var c2 = x1 == 0 || y == 0 ? 0 : bgra.b[w - stride2 - 4];
+						var k2 = cv2 + b4 - c2;
+						var pa2 = k2 - cv2;
+						if(pa2 < 0) {
+							pa2 = -pa2;
+						}
+						var pb2 = k2 - b4;
+						if(pb2 < 0) {
+							pb2 = -pb2;
+						}
+						var pc2 = k2 - c2;
+						if(pc2 < 0) {
+							pc2 = -pc2;
+						}
+						cv2 = (pa2 <= pb2 && pa2 <= pc2 ? cv2 : pb2 <= pc2 ? b4 : c2) + data.b[r++] & 255;
+						bgra.b[w++] = cv2 & 255;
+						bgra.b[w++] = cv2 & 255;
+						bgra.b[w++] = cv2 & 255;
+						bgra.b[w++] = (cv2 == alphvaIdx ? 0 : 255) & 255;
+					}
+				}
+				break;
+			default:
+				throw new js__$Boot_HaxeError("Invalid filter " + f);
+			}
+			w += lineDelta;
+		}
+		break;
+	case 1:
+		var alpha1 = _g4[2];
+		if(h.colbits != 8) {
+			throw new js__$Boot_HaxeError("Unsupported color mode");
+		}
+		var width1 = h.width;
+		if(data.length < h.height * ((alpha1 ? 4 : 3) * width1 + 1)) {
+			throw new js__$Boot_HaxeError("Not enough data");
+		}
+		var alphaRed = -1;
+		var alphaGreen = -1;
+		var alphaBlue = -1;
+		if(!alpha1) {
+			var _g_head2 = d.h;
+			while(_g_head2 != null) {
+				var val2 = _g_head2.item;
+				_g_head2 = _g_head2.next;
+				if(val2[1] == 4) {
+					if(val2[2] == "tRNS") {
+						var data2 = val2[3];
+						if(data2.length >= 6) {
+							alphaRed = data2.b[1];
+							alphaGreen = data2.b[3];
+							alphaBlue = data2.b[5];
+						}
+						break;
+					}
+				}
+			}
+		}
+		var cr = 0;
+		var cg = 0;
+		var cb = 0;
+		var ca3 = 0;
+		var _g14 = 0;
+		var _g6 = h.height;
+		while(_g14 < _g6) {
+			var y1 = _g14++;
+			var f1 = data.b[r++];
+			switch(f1) {
+			case 0:
+				if(alpha1) {
+					var _g311 = 0;
+					while(_g311 < width1) {
+						++_g311;
+						bgra.b[w++] = data.b[r + 2] & 255;
+						bgra.b[w++] = data.b[r + 1] & 255;
+						bgra.b[w++] = data.b[r] & 255;
+						bgra.b[w++] = data.b[r + 3] & 255;
+						r += 4;
+					}
+				} else {
+					var _g312 = 0;
+					while(_g312 < width1) {
+						++_g312;
+						cb = data.b[r + 2];
+						bgra.b[w++] = cb & 255;
+						cg = data.b[r + 1];
+						bgra.b[w++] = cg & 255;
+						cr = data.b[r];
+						bgra.b[w++] = cr & 255;
+						bgra.b[w++] = (cr == alphaRed && cg == alphaGreen && cb == alphaBlue ? 0 : 255) & 255;
+						r += 3;
+					}
+				}
+				break;
+			case 1:
+				ca3 = 0;
+				cb = 0;
+				cg = 0;
+				cr = 0;
+				if(alpha1) {
+					var _g313 = 0;
+					while(_g313 < width1) {
+						++_g313;
+						cb += data.b[r + 2];
+						bgra.b[w++] = cb & 255;
+						cg += data.b[r + 1];
+						bgra.b[w++] = cg & 255;
+						cr += data.b[r];
+						bgra.b[w++] = cr & 255;
+						ca3 += data.b[r + 3];
+						bgra.b[w++] = ca3 & 255;
+						r += 4;
+					}
+				} else {
+					var _g314 = 0;
+					while(_g314 < width1) {
+						++_g314;
+						cb += data.b[r + 2];
+						bgra.b[w++] = cb & 255;
+						cg += data.b[r + 1];
+						bgra.b[w++] = cg & 255;
+						cr += data.b[r];
+						bgra.b[w++] = cr & 255;
+						bgra.b[w++] = (cr == alphaRed && cg == alphaGreen && cb == alphaBlue ? 0 : 255) & 255;
+						r += 3;
+					}
+				}
+				break;
+			case 2:
+				var stride3 = y1 == 0 ? 0 : width1 * 4 * flipY1;
+				if(alpha1) {
+					var _g315 = 0;
+					while(_g315 < width1) {
+						++_g315;
+						bgra.b[w] = data.b[r + 2] + bgra.b[w - stride3] & 255;
+						++w;
+						bgra.b[w] = data.b[r + 1] + bgra.b[w - stride3] & 255;
+						++w;
+						bgra.b[w] = data.b[r] + bgra.b[w - stride3] & 255;
+						++w;
+						bgra.b[w] = data.b[r + 3] + bgra.b[w - stride3] & 255;
+						++w;
+						r += 4;
+					}
+				} else {
+					var _g316 = 0;
+					while(_g316 < width1) {
+						++_g316;
+						cb = data.b[r + 2] + bgra.b[w - stride3];
+						bgra.b[w] = cb & 255;
+						++w;
+						cg = data.b[r + 1] + bgra.b[w - stride3];
+						bgra.b[w] = cg & 255;
+						++w;
+						cr = data.b[r] + bgra.b[w - stride3];
+						bgra.b[w] = cr & 255;
+						++w;
+						bgra.b[w++] = (cr == alphaRed && cg == alphaGreen && cb == alphaBlue ? 0 : 255) & 255;
+						r += 3;
+					}
+				}
+				break;
+			case 3:
+				ca3 = 0;
+				cb = 0;
+				cg = 0;
+				cr = 0;
+				var stride4 = y1 == 0 ? 0 : width1 * 4 * flipY1;
+				if(alpha1) {
+					var _g317 = 0;
+					while(_g317 < width1) {
+						++_g317;
+						cb = data.b[r + 2] + (cb + bgra.b[w - stride4] >> 1) & 255;
+						bgra.b[w++] = cb & 255;
+						cg = data.b[r + 1] + (cg + bgra.b[w - stride4] >> 1) & 255;
+						bgra.b[w++] = cg & 255;
+						cr = data.b[r] + (cr + bgra.b[w - stride4] >> 1) & 255;
+						bgra.b[w++] = cr & 255;
+						ca3 = data.b[r + 3] + (ca3 + bgra.b[w - stride4] >> 1) & 255;
+						bgra.b[w++] = ca3 & 255;
+						r += 4;
+					}
+				} else {
+					var _g318 = 0;
+					while(_g318 < width1) {
+						++_g318;
+						cb = data.b[r + 2] + (cb + bgra.b[w - stride4] >> 1) & 255;
+						bgra.b[w++] = cb & 255;
+						cg = data.b[r + 1] + (cg + bgra.b[w - stride4] >> 1) & 255;
+						bgra.b[w++] = cg & 255;
+						cr = data.b[r] + (cr + bgra.b[w - stride4] >> 1) & 255;
+						bgra.b[w++] = cr & 255;
+						bgra.b[w++] = (cr == alphaRed && cg == alphaGreen && cb == alphaBlue ? 0 : 255) & 255;
+						r += 3;
+					}
+				}
+				break;
+			case 4:
+				var stride5 = width1 * 4 * flipY1;
+				ca3 = 0;
+				cb = 0;
+				cg = 0;
+				cr = 0;
+				if(alpha1) {
+					var _g319 = 0;
+					while(_g319 < width1) {
+						var x2 = _g319++;
+						var b5 = y1 == 0 ? 0 : bgra.b[w - stride5];
+						var c3 = x2 == 0 || y1 == 0 ? 0 : bgra.b[w - stride5 - 4];
+						var k3 = cb + b5 - c3;
+						var pa3 = k3 - cb;
+						if(pa3 < 0) {
+							pa3 = -pa3;
+						}
+						var pb3 = k3 - b5;
+						if(pb3 < 0) {
+							pb3 = -pb3;
+						}
+						var pc3 = k3 - c3;
+						if(pc3 < 0) {
+							pc3 = -pc3;
+						}
+						cb = (pa3 <= pb3 && pa3 <= pc3 ? cb : pb3 <= pc3 ? b5 : c3) + data.b[r + 2] & 255;
+						bgra.b[w++] = cb & 255;
+						var b6 = y1 == 0 ? 0 : bgra.b[w - stride5];
+						var c4 = x2 == 0 || y1 == 0 ? 0 : bgra.b[w - stride5 - 4];
+						var k4 = cg + b6 - c4;
+						var pa4 = k4 - cg;
+						if(pa4 < 0) {
+							pa4 = -pa4;
+						}
+						var pb4 = k4 - b6;
+						if(pb4 < 0) {
+							pb4 = -pb4;
+						}
+						var pc4 = k4 - c4;
+						if(pc4 < 0) {
+							pc4 = -pc4;
+						}
+						cg = (pa4 <= pb4 && pa4 <= pc4 ? cg : pb4 <= pc4 ? b6 : c4) + data.b[r + 1] & 255;
+						bgra.b[w++] = cg & 255;
+						var b7 = y1 == 0 ? 0 : bgra.b[w - stride5];
+						var c5 = x2 == 0 || y1 == 0 ? 0 : bgra.b[w - stride5 - 4];
+						var k5 = cr + b7 - c5;
+						var pa5 = k5 - cr;
+						if(pa5 < 0) {
+							pa5 = -pa5;
+						}
+						var pb5 = k5 - b7;
+						if(pb5 < 0) {
+							pb5 = -pb5;
+						}
+						var pc5 = k5 - c5;
+						if(pc5 < 0) {
+							pc5 = -pc5;
+						}
+						cr = (pa5 <= pb5 && pa5 <= pc5 ? cr : pb5 <= pc5 ? b7 : c5) + data.b[r] & 255;
+						bgra.b[w++] = cr & 255;
+						var b8 = y1 == 0 ? 0 : bgra.b[w - stride5];
+						var c6 = x2 == 0 || y1 == 0 ? 0 : bgra.b[w - stride5 - 4];
+						var k6 = ca3 + b8 - c6;
+						var pa6 = k6 - ca3;
+						if(pa6 < 0) {
+							pa6 = -pa6;
+						}
+						var pb6 = k6 - b8;
+						if(pb6 < 0) {
+							pb6 = -pb6;
+						}
+						var pc6 = k6 - c6;
+						if(pc6 < 0) {
+							pc6 = -pc6;
+						}
+						ca3 = (pa6 <= pb6 && pa6 <= pc6 ? ca3 : pb6 <= pc6 ? b8 : c6) + data.b[r + 3] & 255;
+						bgra.b[w++] = ca3 & 255;
+						r += 4;
+					}
+				} else {
+					var _g320 = 0;
+					while(_g320 < width1) {
+						var x3 = _g320++;
+						var b9 = y1 == 0 ? 0 : bgra.b[w - stride5];
+						var c7 = x3 == 0 || y1 == 0 ? 0 : bgra.b[w - stride5 - 4];
+						var k7 = cb + b9 - c7;
+						var pa7 = k7 - cb;
+						if(pa7 < 0) {
+							pa7 = -pa7;
+						}
+						var pb7 = k7 - b9;
+						if(pb7 < 0) {
+							pb7 = -pb7;
+						}
+						var pc7 = k7 - c7;
+						if(pc7 < 0) {
+							pc7 = -pc7;
+						}
+						cb = (pa7 <= pb7 && pa7 <= pc7 ? cb : pb7 <= pc7 ? b9 : c7) + data.b[r + 2] & 255;
+						bgra.b[w++] = cb & 255;
+						var b10 = y1 == 0 ? 0 : bgra.b[w - stride5];
+						var c8 = x3 == 0 || y1 == 0 ? 0 : bgra.b[w - stride5 - 4];
+						var k8 = cg + b10 - c8;
+						var pa8 = k8 - cg;
+						if(pa8 < 0) {
+							pa8 = -pa8;
+						}
+						var pb8 = k8 - b10;
+						if(pb8 < 0) {
+							pb8 = -pb8;
+						}
+						var pc8 = k8 - c8;
+						if(pc8 < 0) {
+							pc8 = -pc8;
+						}
+						cg = (pa8 <= pb8 && pa8 <= pc8 ? cg : pb8 <= pc8 ? b10 : c8) + data.b[r + 1] & 255;
+						bgra.b[w++] = cg & 255;
+						var b11 = y1 == 0 ? 0 : bgra.b[w - stride5];
+						var c9 = x3 == 0 || y1 == 0 ? 0 : bgra.b[w - stride5 - 4];
+						var k9 = cr + b11 - c9;
+						var pa9 = k9 - cr;
+						if(pa9 < 0) {
+							pa9 = -pa9;
+						}
+						var pb9 = k9 - b11;
+						if(pb9 < 0) {
+							pb9 = -pb9;
+						}
+						var pc9 = k9 - c9;
+						if(pc9 < 0) {
+							pc9 = -pc9;
+						}
+						cr = (pa9 <= pb9 && pa9 <= pc9 ? cr : pb9 <= pc9 ? b11 : c9) + data.b[r] & 255;
+						bgra.b[w++] = cr & 255;
+						bgra.b[w++] = (cr == alphaRed && cg == alphaGreen && cb == alphaBlue ? 0 : 255) & 255;
+						r += 3;
+					}
+				}
+				break;
+			default:
+				throw new js__$Boot_HaxeError("Invalid filter " + f1);
+			}
+			w += lineDelta;
+		}
+		break;
+	case 2:
+		var pal = format_png_Tools.getPalette(d);
+		if(pal == null) {
+			throw new js__$Boot_HaxeError("PNG Palette is missing");
+		}
+		var alpha2 = null;
+		var _g_head3 = d.h;
+		while(_g_head3 != null) {
+			var val3 = _g_head3.item;
+			_g_head3 = _g_head3.next;
+			if(val3[1] == 4) {
+				if(val3[2] == "tRNS") {
+					alpha2 = val3[3];
+					break;
+				}
+			}
+		}
+		if(alpha2 != null && alpha2.length < 1 << h.colbits) {
+			var alpha21 = new haxe_io_Bytes(new ArrayBuffer(1 << h.colbits));
+			alpha21.blit(0,alpha2,0,alpha2.length);
+			alpha21.fill(alpha2.length,alpha21.length - alpha2.length,255);
+			alpha2 = alpha21;
+		}
+		var width2 = h.width;
+		if(data.length < h.height * (Math.ceil(width2 * h.colbits / 8) + 1)) {
+			throw new js__$Boot_HaxeError("Not enough data");
+		}
+		var rline = h.width * h.colbits >> 3;
+		var _g15 = 0;
+		var _g7 = h.height;
+		while(_g15 < _g7) {
+			var y2 = _g15++;
+			var f2 = data.b[r++];
+			if(f2 == 0) {
+				r += rline;
+				continue;
+			}
+			switch(f2) {
+			case 1:
+				var c10 = 0;
+				var _g321 = 0;
+				while(_g321 < width2) {
+					++_g321;
+					c10 += data.b[r];
+					data.b[r++] = c10 & 255 & 255;
+				}
+				break;
+			case 2:
+				var stride6 = y2 == 0 ? 0 : rline + 1;
+				var _g322 = 0;
+				while(_g322 < width2) {
+					++_g322;
+					data.b[r] = data.b[r] + data.b[r - stride6] & 255;
+					++r;
+				}
+				break;
+			case 3:
+				var c11 = 0;
+				var stride7 = y2 == 0 ? 0 : rline + 1;
+				var _g323 = 0;
+				while(_g323 < width2) {
+					++_g323;
+					c11 = data.b[r] + (c11 + data.b[r - stride7] >> 1) & 255;
+					data.b[r++] = c11 & 255;
+				}
+				break;
+			case 4:
+				var stride8 = rline + 1;
+				var c12 = 0;
+				var _g324 = 0;
+				while(_g324 < width2) {
+					var x4 = _g324++;
+					var b12 = y2 == 0 ? 0 : data.b[r - stride8];
+					var c13 = x4 == 0 || y2 == 0 ? 0 : data.b[r - stride8 - 1];
+					var k10 = c12 + b12 - c13;
+					var pa10 = k10 - c12;
+					if(pa10 < 0) {
+						pa10 = -pa10;
+					}
+					var pb10 = k10 - b12;
+					if(pb10 < 0) {
+						pb10 = -pb10;
+					}
+					var pc10 = k10 - c13;
+					if(pc10 < 0) {
+						pc10 = -pc10;
+					}
+					c12 = (pa10 <= pb10 && pa10 <= pc10 ? c12 : pb10 <= pc10 ? b12 : c13) + data.b[r] & 255;
+					data.b[r++] = c12 & 255;
+				}
+				break;
+			default:
+				throw new js__$Boot_HaxeError("Invalid filter " + f2);
+			}
+		}
+		var r1 = 0;
+		if(h.colbits == 8) {
+			var _g16 = 0;
+			var _g8 = h.height;
+			while(_g16 < _g8) {
+				++_g16;
+				++r1;
+				var _g325 = 0;
+				var _g21 = h.width;
+				while(_g325 < _g21) {
+					++_g325;
+					var c14 = data.b[r1++];
+					bgra.b[w++] = pal.b[c14 * 3 + 2] & 255;
+					bgra.b[w++] = pal.b[c14 * 3 + 1] & 255;
+					bgra.b[w++] = pal.b[c14 * 3] & 255;
+					bgra.b[w++] = (alpha2 != null ? alpha2.b[c14] : 255) & 255;
+				}
+				w += lineDelta;
+			}
+		} else if(h.colbits < 8) {
+			var req = h.colbits;
+			var mask = (1 << req) - 1;
+			var _g17 = 0;
+			var _g9 = h.height;
+			while(_g17 < _g9) {
+				++_g17;
+				++r1;
+				var bits = 0;
+				var nbits = 0;
+				var _g326 = 0;
+				var _g22 = h.width;
+				while(_g326 < _g22) {
+					++_g326;
+					if(nbits < req) {
+						bits = bits << 8 | data.b[r1++];
+						nbits += 8;
+					}
+					var c15 = bits >>> nbits - req & mask;
+					nbits -= req;
+					bgra.b[w++] = pal.b[c15 * 3 + 2] & 255;
+					bgra.b[w++] = pal.b[c15 * 3 + 1] & 255;
+					bgra.b[w++] = pal.b[c15 * 3] & 255;
+					bgra.b[w++] = (alpha2 != null ? alpha2.b[c15] : 255) & 255;
+				}
+				w += lineDelta;
+			}
+		} else {
+			throw new js__$Boot_HaxeError(h.colbits + " indexed bits per pixel not supported");
+		}
+		break;
+	}
+	return bgra;
+};
+var format_tools_Inflate = function() { };
+$hxClasses["format.tools.Inflate"] = format_tools_Inflate;
+format_tools_Inflate.__name__ = true;
+format_tools_Inflate.run = function(bytes) {
+	return haxe_zip_Uncompress.run(bytes);
+};
 var h2d_BlendMode = $hxClasses["h2d.BlendMode"] = { __ename__ : true, __constructs__ : ["None","Alpha","Add","SoftAdd","Multiply","Erase","Screen"] };
 h2d_BlendMode.None = ["None",0];
 h2d_BlendMode.None.toString = $estr;
@@ -2142,6 +3196,17 @@ h2d_BlendMode.Screen = ["Screen",6];
 h2d_BlendMode.Screen.toString = $estr;
 h2d_BlendMode.Screen.__enum__ = h2d_BlendMode;
 h2d_BlendMode.__empty_constructs__ = [h2d_BlendMode.None,h2d_BlendMode.Alpha,h2d_BlendMode.Add,h2d_BlendMode.SoftAdd,h2d_BlendMode.Multiply,h2d_BlendMode.Erase,h2d_BlendMode.Screen];
+var h2d_col_Bounds = function() {
+	this.xMin = 1e20;
+	this.yMin = 1e20;
+	this.xMax = -1e20;
+	this.yMax = -1e20;
+};
+$hxClasses["h2d.col.Bounds"] = h2d_col_Bounds;
+h2d_col_Bounds.__name__ = true;
+h2d_col_Bounds.prototype = {
+	__class__: h2d_col_Bounds
+};
 var h2d__$Graphics_GPoint = function(x,y,r,g,b,a) {
 	this.x = x;
 	this.y = y;
@@ -3346,18 +4411,16 @@ h2d_Tile.prototype = {
 			this.v2 = (this.y + this.height) / tex.height;
 		}
 	}
+	,sub: function(x,y,w,h,dx,dy) {
+		if(dy == null) {
+			dy = 0;
+		}
+		if(dx == null) {
+			dx = 0;
+		}
+		return new h2d_Tile(this.innerTex,this.x + x,this.y + y,w,h,dx,dy);
+	}
 	,__class__: h2d_Tile
-};
-var h2d_col_Bounds = function() {
-	this.xMin = 1e20;
-	this.yMin = 1e20;
-	this.xMax = -1e20;
-	this.yMax = -1e20;
-};
-$hxClasses["h2d.col.Bounds"] = h2d_col_Bounds;
-h2d_col_Bounds.__name__ = true;
-h2d_col_Bounds.prototype = {
-	__class__: h2d_col_Bounds
 };
 var h2d_col_Point = function(x,y) {
 	if(y == null) {
@@ -3664,6 +4727,308 @@ $hxClasses["h3d._Engine.TargetTmp"] = h3d__$Engine_TargetTmp;
 h3d__$Engine_TargetTmp.__name__ = true;
 h3d__$Engine_TargetTmp.prototype = {
 	__class__: h3d__$Engine_TargetTmp
+};
+var h3d_Engine = function(hardware,aa) {
+	if(aa == null) {
+		aa = 0;
+	}
+	if(hardware == null) {
+		hardware = true;
+	}
+	this.tmpVector = new h3d_Vector();
+	this.frameCount = 0;
+	this.backgroundColor = -16777216;
+	this.hardware = hardware;
+	this.antiAlias = aa;
+	this.autoResize = true;
+	this.set_fullScreen(!hxd_System.get_isWindowed());
+	var stage = hxd_Stage.getInstance();
+	this.realFps = hxd_System.getDefaultFrameRate();
+	this.lastTime = new Date().getTime() / 1000;
+	stage.addResizeEvent($bind(this,this.onStageResize));
+	this.driver = new h3d_impl_GlDriver();
+	h3d_Engine.CURRENT = this;
+};
+$hxClasses["h3d.Engine"] = h3d_Engine;
+h3d_Engine.__name__ = true;
+h3d_Engine.prototype = {
+	init: function() {
+		this.driver.init($bind(this,this.onCreate),!this.hardware);
+	}
+	,selectShader: function(shader) {
+		if(this.needFlushTarget) {
+			this.doFlushTarget();
+		}
+		if(this.driver.selectShader(shader)) {
+			this.shaderSwitches++;
+		}
+	}
+	,selectMaterial: function(pass) {
+		this.driver.selectMaterial(pass);
+	}
+	,uploadShaderBuffers: function(buffers,which) {
+		this.driver.uploadShaderBuffers(buffers,which);
+	}
+	,selectBuffer: function(buf) {
+		if(buf.isDisposed()) {
+			return false;
+		}
+		if(this.needFlushTarget) {
+			this.doFlushTarget();
+		}
+		this.driver.selectBuffer(buf);
+		return true;
+	}
+	,renderQuadBuffer: function(b,start,max) {
+		if(max == null) {
+			max = -1;
+		}
+		if(start == null) {
+			start = 0;
+		}
+		this.renderBuffer(b,this.mem.quadIndexes,2,start,max);
+		return;
+	}
+	,renderBuffer: function(b,indexes,vertPerTri,startTri,drawTri) {
+		if(drawTri == null) {
+			drawTri = -1;
+		}
+		if(startTri == null) {
+			startTri = 0;
+		}
+		if(indexes.isDisposed()) {
+			return;
+		}
+		while(true) {
+			var ntri = b.vertices / vertPerTri | 0;
+			var pos = b.position / vertPerTri | 0;
+			if(startTri > 0) {
+				if(startTri >= ntri) {
+					startTri -= ntri;
+					b = b.next;
+					if(!(b != null)) {
+						break;
+					} else {
+						continue;
+					}
+				}
+				pos += startTri;
+				ntri -= startTri;
+				startTri = 0;
+			}
+			if(drawTri >= 0) {
+				if(drawTri == 0) {
+					return;
+				}
+				drawTri -= ntri;
+				if(drawTri < 0) {
+					ntri += drawTri;
+					drawTri = 0;
+				}
+			}
+			if(ntri > 0 && this.selectBuffer(b)) {
+				this.driver.draw(indexes.ibuf,pos * 3,ntri);
+				this.drawTriangles += ntri;
+				this.drawCalls++;
+			}
+			b = b.next;
+			if(!(b != null)) {
+				break;
+			}
+		}
+	}
+	,renderIndexed: function(b,indexes,startTri,drawTri) {
+		if(drawTri == null) {
+			drawTri = -1;
+		}
+		if(startTri == null) {
+			startTri = 0;
+		}
+		if(b.next != null) {
+			throw new js__$Boot_HaxeError("Buffer is split");
+		}
+		if(indexes.isDisposed()) {
+			return;
+		}
+		if(drawTri < 0) {
+			drawTri = (indexes.count / 3 | 0) - startTri;
+		}
+		if(drawTri > 0 && this.selectBuffer(b)) {
+			this.driver.draw(indexes.ibuf,startTri * 3,drawTri);
+			this.drawTriangles += drawTri;
+			this.drawCalls++;
+		}
+	}
+	,set_debug: function(d) {
+		this.debug = d;
+		this.driver.setDebug(this.debug);
+		return d;
+	}
+	,onCreate: function(disposed) {
+		if(this.autoResize) {
+			var stage = hxd_Stage.getInstance();
+			this.width = stage.get_width();
+			this.height = stage.get_height();
+		}
+		if(disposed) {
+			this.mem.onContextLost();
+		} else {
+			this.mem = new h3d_impl_MemoryManager(this.driver);
+			this.mem.init();
+		}
+		this.hardware = this.driver.hasFeature(h3d_impl_Feature.HardwareAccelerated);
+		this.set_debug(this.debug);
+		this.set_fullScreen(this.fullScreen);
+		this.resize(this.width,this.height);
+		if(disposed) {
+			this.onContextLost();
+		} else {
+			this.onReady();
+		}
+	}
+	,onContextLost: function() {
+	}
+	,onReady: function() {
+	}
+	,onStageResize: function() {
+		if(this.autoResize && !this.driver.isDisposed()) {
+			var stage = hxd_Stage.getInstance();
+			var w = stage.get_width();
+			var h = stage.get_height();
+			if(w != this.width || h != this.height) {
+				this.resize(w,h);
+			}
+			this.onResized();
+		}
+	}
+	,set_fullScreen: function(v) {
+		this.fullScreen = v;
+		if(this.mem != null && hxd_System.get_isWindowed()) {
+			hxd_Stage.getInstance();
+		}
+		return v;
+	}
+	,onResized: function() {
+	}
+	,resize: function(width,height) {
+		if(width < 32) {
+			width = 32;
+		}
+		if(height < 32) {
+			height = 32;
+		}
+		this.width = width;
+		this.height = height;
+		if(!this.driver.isDisposed()) {
+			this.driver.resize(width,height);
+		}
+	}
+	,begin: function() {
+		if(this.driver.isDisposed()) {
+			return false;
+		}
+		this.frameCount++;
+		this.drawTriangles = 0;
+		this.shaderSwitches = 0;
+		this.drawCalls = 0;
+		this.targetStack = null;
+		this.needFlushTarget = this.currentTarget != null;
+		this.driver.begin(this.frameCount);
+		if(this.backgroundColor != null) {
+			this.clear(this.backgroundColor,1,0);
+		}
+		return true;
+	}
+	,end: function() {
+	}
+	,getCurrentTarget: function() {
+		if(this.targetStack == null) {
+			return null;
+		} else {
+			return this.targetStack.t;
+		}
+	}
+	,pushTarget: function(tex) {
+		var c = this.targetTmp;
+		if(c == null) {
+			c = new h3d__$Engine_TargetTmp(tex,this.targetStack);
+		} else {
+			this.targetTmp = c.next;
+			c.t = tex;
+			c.next = this.targetStack;
+		}
+		this.targetStack = c;
+		this.needFlushTarget = this.currentTarget != tex;
+	}
+	,popTarget: function() {
+		var c = this.targetStack;
+		if(c == null) {
+			throw new js__$Boot_HaxeError("popTarget() with no matching pushTarget()");
+		}
+		this.targetStack = c.next;
+		this.needFlushTarget = this.currentTarget != (this.targetStack == null ? null : this.targetStack.t);
+		c.t = null;
+		c.next = this.targetTmp;
+		this.targetTmp = c;
+	}
+	,doFlushTarget: function() {
+		var tex = this.targetStack == null ? null : this.targetStack.t;
+		this.currentTarget = tex;
+		this.driver.setRenderTarget(tex);
+		this.needFlushTarget = false;
+	}
+	,clear: function(color,depth,stencil) {
+		if(color != null) {
+			var _this = this.tmpVector;
+			_this.x = (color >> 16 & 255) * 0.00392156862745098;
+			_this.y = (color >> 8 & 255) * 0.00392156862745098;
+			_this.z = (color & 255) * 0.00392156862745098;
+			_this.w = (color >>> 24) * 0.00392156862745098;
+		}
+		if(this.needFlushTarget) {
+			this.doFlushTarget();
+		}
+		this.driver.clear(color == null ? null : this.tmpVector,depth,stencil);
+	}
+	,setRenderZone: function(x,y,width,height) {
+		if(height == null) {
+			height = -1;
+		}
+		if(width == null) {
+			width = -1;
+		}
+		if(y == null) {
+			y = 0;
+		}
+		if(x == null) {
+			x = 0;
+		}
+		this.driver.setRenderZone(x,y,width,height);
+	}
+	,render: function(obj) {
+		if(!this.begin()) {
+			return false;
+		}
+		obj.render(this);
+		this.end();
+		var delta = new Date().getTime() / 1000 - this.lastTime;
+		this.lastTime += delta;
+		if(delta > 0) {
+			var curFps = 1. / delta;
+			if(curFps > this.realFps * 2) {
+				curFps = this.realFps * 2;
+			} else if(curFps < this.realFps * 0.5) {
+				curFps = this.realFps * 0.5;
+			}
+			var f = delta / .5;
+			if(f > 0.3) {
+				f = 0.3;
+			}
+			this.realFps = this.realFps * (1 - f) + curFps * f;
+		}
+		return true;
+	}
+	,__class__: h3d_Engine
 };
 var h3d_Indexes = function(count) {
 	this.mem = h3d_Engine.CURRENT.mem;
@@ -4465,6 +5830,8 @@ h3d_impl_Driver.prototype = {
 	}
 	,uploadVertexBuffer: function(v,startVertex,vertexCount,buf,bufPos) {
 	}
+	,uploadTextureBitmap: function(t,bmp,mipLevel,side) {
+	}
 	,uploadTexturePixels: function(t,pixels,mipLevel,side) {
 	}
 	,__class__: h3d_impl_Driver
@@ -4991,6 +6358,20 @@ h3d_impl_GlDriver.prototype = $extend(h3d_impl_Driver.prototype,{
 	}
 	,disposeVertexes: function(v) {
 		this.gl.deleteBuffer(v.b);
+	}
+	,uploadTextureBitmap: function(t,bmp,mipLevel,side) {
+		if(t.format != hxd_PixelFormat.RGBA || (t.flags & 2) != 0) {
+			var pixels = bmp.getPixels();
+			this.uploadTexturePixels(t,pixels,mipLevel,side);
+			pixels.dispose();
+		} else {
+			var img = bmp.ctx;
+			this.gl.bindTexture(3553,t.t.t);
+			this.gl.pixelStorei(37440,1);
+			this.gl.texImage2D(3553,mipLevel,t.t.internalFmt,this.getChannels(t.t),t.t.pixelFmt,img.getImageData(0,0,bmp.ctx.canvas.width,bmp.ctx.canvas.height));
+			this.gl.bindTexture(3553,null);
+			t.flags |= 128;
+		}
 	}
 	,uploadTexturePixels: function(t,pixels,mipLevel,side) {
 		var cubic = (t.flags & 2) != 0;
@@ -6250,6 +7631,23 @@ h3d_mat_Texture.prototype = {
 		this.bits = this.bits & -193 | w[1] << 6;
 		return this.wrap = w;
 	}
+	,resize: function(width,height) {
+		this.dispose();
+		var tw = 1;
+		var th = 1;
+		while(tw < width) tw <<= 1;
+		while(th < height) th <<= 1;
+		if(tw != width || th != height) {
+			this.flags |= 8;
+		} else {
+			this.flags &= 268435447;
+		}
+		this.width = width;
+		this.height = height;
+		if((this.flags & 16) == 0) {
+			this.alloc();
+		}
+	}
 	,clear: function(color,alpha) {
 		if(alpha == null) {
 			alpha = 1.;
@@ -6277,6 +7675,17 @@ h3d_mat_Texture.prototype = {
 		}
 		this.uploadPixels(p);
 		p.dispose();
+	}
+	,uploadBitmap: function(bmp,mipLevel,side) {
+		if(side == null) {
+			side = 0;
+		}
+		if(mipLevel == null) {
+			mipLevel = 0;
+		}
+		this.alloc();
+		this.mem.driver.uploadTextureBitmap(this,bmp,mipLevel,side);
+		this.flags |= 128;
 	}
 	,uploadPixels: function(pixels,mipLevel,side) {
 		if(side == null) {
@@ -9756,6 +11165,25 @@ h3d_shader_Texture.prototype = $extend(hxsl_Shader.prototype,{
 	}
 	,__class__: h3d_shader_Texture
 });
+var h3d_shader_UVDelta = function() {
+	this.uvDelta__ = new h3d_Vector();
+};
+$hxClasses["h3d.shader.UVDelta"] = h3d_shader_UVDelta;
+h3d_shader_UVDelta.__name__ = true;
+h3d_shader_UVDelta.__super__ = hxsl_Shader;
+h3d_shader_UVDelta.prototype = $extend(hxsl_Shader.prototype,{
+	updateConstants: function(globals) {
+		this.constBits = 0;
+		this.updateConstantsFinal(globals);
+	}
+	,getParamValue: function(index) {
+		if(index == 0) {
+			return this.uvDelta__;
+		}
+		return null;
+	}
+	,__class__: h3d_shader_UVDelta
+});
 var h3d_shader_VertexColorAlpha = function() { };
 $hxClasses["h3d.shader.VertexColorAlpha"] = h3d_shader_VertexColorAlpha;
 h3d_shader_VertexColorAlpha.__name__ = true;
@@ -9806,11 +11234,154 @@ haxe_IMap.__name__ = true;
 haxe_IMap.prototype = {
 	__class__: haxe_IMap
 };
+var haxe_EntryPoint = function() { };
+$hxClasses["haxe.EntryPoint"] = haxe_EntryPoint;
+haxe_EntryPoint.__name__ = true;
+haxe_EntryPoint.processEvents = function() {
+	while(true) {
+		var f = haxe_EntryPoint.pending.shift();
+		if(f == null) {
+			break;
+		}
+		f();
+	}
+	if(haxe_MainLoop.pending == null && haxe_EntryPoint.threadCount == 0) {
+		return -1;
+	}
+	return haxe_MainLoop.tick();
+};
+haxe_EntryPoint.run = function() {
+	haxe_EntryPoint.processEvents();
+	var $window = window;
+	($window.requestAnimationFrame || $window.webkitRequestAnimationFrame || $window.mozRequestAnimationFrame)(haxe_EntryPoint.run);
+};
+var haxe__$Int64__$_$_$Int64 = function(high,low) {
+	this.high = high;
+	this.low = low;
+};
+$hxClasses["haxe._Int64.___Int64"] = haxe__$Int64__$_$_$Int64;
+haxe__$Int64__$_$_$Int64.__name__ = true;
+haxe__$Int64__$_$_$Int64.prototype = {
+	__class__: haxe__$Int64__$_$_$Int64
+};
 var haxe_Log = function() { };
 $hxClasses["haxe.Log"] = haxe_Log;
 haxe_Log.__name__ = true;
 haxe_Log.trace = function(v,infos) {
 	js_Boot.__trace(v,infos);
+};
+var haxe_MainEvent = function() { };
+$hxClasses["haxe.MainEvent"] = haxe_MainEvent;
+haxe_MainEvent.__name__ = true;
+haxe_MainEvent.prototype = {
+	__class__: haxe_MainEvent
+};
+var haxe_MainLoop = function() { };
+$hxClasses["haxe.MainLoop"] = haxe_MainLoop;
+haxe_MainLoop.__name__ = true;
+haxe_MainLoop.sortEvents = function() {
+	var list = haxe_MainLoop.pending;
+	if(list == null) {
+		return;
+	}
+	var insize = 1;
+	var nmerges;
+	var psize = 0;
+	var qsize = 0;
+	var p;
+	var q;
+	var e;
+	var tail;
+	while(true) {
+		p = list;
+		list = null;
+		tail = null;
+		nmerges = 0;
+		while(p != null) {
+			++nmerges;
+			q = p;
+			psize = 0;
+			var _g1 = 0;
+			var _g = insize;
+			while(_g1 < _g) {
+				++_g1;
+				++psize;
+				q = q.next;
+				if(q == null) {
+					break;
+				}
+			}
+			qsize = insize;
+			while(psize > 0 || qsize > 0 && q != null) {
+				if(psize == 0) {
+					e = q;
+					q = q.next;
+					--qsize;
+				} else if(qsize == 0 || q == null || (p.priority > q.priority || p.priority == q.priority && p.nextRun <= q.nextRun)) {
+					e = p;
+					p = p.next;
+					--psize;
+				} else {
+					e = q;
+					q = q.next;
+					--qsize;
+				}
+				if(tail != null) {
+					tail.next = e;
+				} else {
+					list = e;
+				}
+				e.prev = tail;
+				tail = e;
+			}
+			p = q;
+		}
+		tail.next = null;
+		if(nmerges <= 1) {
+			break;
+		}
+		insize *= 2;
+	}
+	list.prev = null;
+	haxe_MainLoop.pending = list;
+};
+haxe_MainLoop.tick = function() {
+	haxe_MainLoop.sortEvents();
+	var e = haxe_MainLoop.pending;
+	var now = new Date().getTime() / 1000;
+	var wait = 1e9;
+	while(e != null) {
+		var next = e.next;
+		var wt = e.nextRun - now;
+		if(e.nextRun < 0 || wt <= 0) {
+			wait = 0;
+			if(e.f != null) {
+				e.f();
+			}
+		} else if(wait > wt) {
+			wait = wt;
+		}
+		e = next;
+	}
+	return wait;
+};
+var haxe_Resource = function() { };
+$hxClasses["haxe.Resource"] = haxe_Resource;
+haxe_Resource.__name__ = true;
+haxe_Resource.getBytes = function(name) {
+	var _g = 0;
+	var _g1 = haxe_Resource.content;
+	while(_g < _g1.length) {
+		var x = _g1[_g];
+		++_g;
+		if(x.name == name) {
+			if(x.str != null) {
+				return haxe_io_Bytes.ofString(x.str);
+			}
+			return haxe_crypto_Base64.decode(x.data);
+		}
+	}
+	return null;
 };
 var haxe_Timer = function(time_ms) {
 	var me = this;
@@ -10176,6 +11747,255 @@ haxe_Unserializer.prototype = {
 		throw new js__$Boot_HaxeError("Invalid char " + this.buf.charAt(this.pos) + " at position " + this.pos);
 	}
 	,__class__: haxe_Unserializer
+};
+var haxe_crypto_Adler32 = function() {
+	this.a1 = 1;
+	this.a2 = 0;
+};
+$hxClasses["haxe.crypto.Adler32"] = haxe_crypto_Adler32;
+haxe_crypto_Adler32.__name__ = true;
+haxe_crypto_Adler32.read = function(i) {
+	var a = new haxe_crypto_Adler32();
+	var a2a = i.readByte();
+	var a2b = i.readByte();
+	a.a1 = i.readByte() << 8 | i.readByte();
+	a.a2 = a2a << 8 | a2b;
+	return a;
+};
+haxe_crypto_Adler32.prototype = {
+	update: function(b,pos,len) {
+		var a1 = this.a1;
+		var a2 = this.a2;
+		var _g1 = pos;
+		var _g = pos + len;
+		while(_g1 < _g) {
+			a1 = (a1 + b.b[_g1++]) % 65521;
+			a2 = (a2 + a1) % 65521;
+		}
+		this.a1 = a1;
+		this.a2 = a2;
+	}
+	,equals: function(a) {
+		if(a.a1 == this.a1) {
+			return a.a2 == this.a2;
+		} else {
+			return false;
+		}
+	}
+	,__class__: haxe_crypto_Adler32
+};
+var haxe_io_Bytes = function(data) {
+	this.length = data.byteLength;
+	this.b = new Uint8Array(data);
+	this.b.bufferValue = data;
+	data.hxBytes = this;
+	data.bytes = this.b;
+};
+$hxClasses["haxe.io.Bytes"] = haxe_io_Bytes;
+haxe_io_Bytes.__name__ = true;
+haxe_io_Bytes.ofString = function(s) {
+	var a = [];
+	var i = 0;
+	while(i < s.length) {
+		var c = s.charCodeAt(i++);
+		if(55296 <= c && c <= 56319) {
+			c = c - 55232 << 10 | s.charCodeAt(i++) & 1023;
+		}
+		if(c <= 127) {
+			a.push(c);
+		} else if(c <= 2047) {
+			a.push(192 | c >> 6);
+			a.push(128 | c & 63);
+		} else if(c <= 65535) {
+			a.push(224 | c >> 12);
+			a.push(128 | c >> 6 & 63);
+			a.push(128 | c & 63);
+		} else {
+			a.push(240 | c >> 18);
+			a.push(128 | c >> 12 & 63);
+			a.push(128 | c >> 6 & 63);
+			a.push(128 | c & 63);
+		}
+	}
+	return new haxe_io_Bytes(new Uint8Array(a).buffer);
+};
+haxe_io_Bytes.ofData = function(b) {
+	var hb = b.hxBytes;
+	if(hb != null) {
+		return hb;
+	}
+	return new haxe_io_Bytes(b);
+};
+haxe_io_Bytes.prototype = {
+	blit: function(pos,src,srcpos,len) {
+		if(pos < 0 || srcpos < 0 || len < 0 || pos + len > this.length || srcpos + len > src.length) {
+			throw new js__$Boot_HaxeError(haxe_io_Error.OutsideBounds);
+		}
+		if(srcpos == 0 && len == src.b.byteLength) {
+			this.b.set(src.b,pos);
+		} else {
+			this.b.set(src.b.subarray(srcpos,srcpos + len),pos);
+		}
+	}
+	,fill: function(pos,len,value) {
+		var _g1 = 0;
+		while(_g1 < len) {
+			++_g1;
+			this.b[pos++] = value & 255;
+		}
+	}
+	,getInt32: function(pos) {
+		if(this.data == null) {
+			this.data = new DataView(this.b.buffer,this.b.byteOffset,this.b.byteLength);
+		}
+		return this.data.getInt32(pos,true);
+	}
+	,setInt32: function(pos,v) {
+		if(this.data == null) {
+			this.data = new DataView(this.b.buffer,this.b.byteOffset,this.b.byteLength);
+		}
+		this.data.setInt32(pos,v,true);
+	}
+	,getString: function(pos,len) {
+		if(pos < 0 || len < 0 || pos + len > this.length) {
+			throw new js__$Boot_HaxeError(haxe_io_Error.OutsideBounds);
+		}
+		var s = "";
+		var b = this.b;
+		var fcc = String.fromCharCode;
+		var i = pos;
+		var max = pos + len;
+		while(i < max) {
+			var c = b[i++];
+			if(c < 128) {
+				if(c == 0) {
+					break;
+				}
+				s += fcc(c);
+			} else if(c < 224) {
+				s += fcc((c & 63) << 6 | b[i++] & 127);
+			} else if(c < 240) {
+				s += fcc((c & 31) << 12 | (b[i++] & 127) << 6 | b[i++] & 127);
+			} else {
+				var u = (c & 15) << 18 | (b[i++] & 127) << 12 | (b[i++] & 127) << 6 | b[i++] & 127;
+				s += fcc((u >> 10) + 55232);
+				s += fcc(u & 1023 | 56320);
+			}
+		}
+		return s;
+	}
+	,toString: function() {
+		return this.getString(0,this.length);
+	}
+	,__class__: haxe_io_Bytes
+};
+var haxe_crypto_Base64 = function() { };
+$hxClasses["haxe.crypto.Base64"] = haxe_crypto_Base64;
+haxe_crypto_Base64.__name__ = true;
+haxe_crypto_Base64.decode = function(str,complement) {
+	if(complement == null) {
+		complement = true;
+	}
+	if(complement) {
+		while(HxOverrides.cca(str,str.length - 1) == 61) str = HxOverrides.substr(str,0,-1);
+	}
+	return new haxe_crypto_BaseCode(haxe_crypto_Base64.BYTES).decodeBytes(haxe_io_Bytes.ofString(str));
+};
+var haxe_crypto_BaseCode = function(base) {
+	var len = base.length;
+	var nbits = 1;
+	while(len > 1 << nbits) ++nbits;
+	if(nbits > 8 || len != 1 << nbits) {
+		throw new js__$Boot_HaxeError("BaseCode : base length must be a power of two.");
+	}
+	this.base = base;
+	this.nbits = nbits;
+};
+$hxClasses["haxe.crypto.BaseCode"] = haxe_crypto_BaseCode;
+haxe_crypto_BaseCode.__name__ = true;
+haxe_crypto_BaseCode.prototype = {
+	initTable: function() {
+		var tbl = [];
+		var _g = 0;
+		while(_g < 256) tbl[_g++] = -1;
+		var _g1 = 0;
+		var _g2 = this.base.length;
+		while(_g1 < _g2) {
+			var i = _g1++;
+			tbl[this.base.b[i]] = i;
+		}
+		this.tbl = tbl;
+	}
+	,decodeBytes: function(b) {
+		var nbits = this.nbits;
+		if(this.tbl == null) {
+			this.initTable();
+		}
+		var tbl = this.tbl;
+		var size = b.length * nbits >> 3;
+		var out = new haxe_io_Bytes(new ArrayBuffer(size));
+		var buf = 0;
+		var curbits = 0;
+		var pin = 0;
+		var pout = 0;
+		while(pout < size) {
+			while(curbits < 8) {
+				curbits += nbits;
+				buf <<= nbits;
+				var i = tbl[b.b[pin++]];
+				if(i == -1) {
+					throw new js__$Boot_HaxeError("BaseCode : invalid encoded char");
+				}
+				buf |= i;
+			}
+			curbits -= 8;
+			out.b[pout++] = buf >> curbits & 255 & 255;
+		}
+		return out;
+	}
+	,__class__: haxe_crypto_BaseCode
+};
+var haxe_crypto_Crc32 = function() {
+	this.crc = -1;
+};
+$hxClasses["haxe.crypto.Crc32"] = haxe_crypto_Crc32;
+haxe_crypto_Crc32.__name__ = true;
+haxe_crypto_Crc32.prototype = {
+	'byte': function(b) {
+		var tmp = (this.crc ^ b) & 255;
+		var _g = 0;
+		while(_g < 8) {
+			++_g;
+			if((tmp & 1) == 1) {
+				tmp = tmp >>> 1 ^ -306674912;
+			} else {
+				tmp >>>= 1;
+			}
+		}
+		this.crc = this.crc >>> 8 ^ tmp;
+	}
+	,update: function(b,pos,len) {
+		var b1 = b.b.bufferValue;
+		var _g1 = pos;
+		var _g = pos + len;
+		while(_g1 < _g) {
+			var tmp = (this.crc ^ b1.bytes[_g1++]) & 255;
+			var _g2 = 0;
+			while(_g2 < 8) {
+				++_g2;
+				if((tmp & 1) == 1) {
+					tmp = tmp >>> 1 ^ -306674912;
+				} else {
+					tmp >>>= 1;
+				}
+			}
+			this.crc = this.crc >>> 8 ^ tmp;
+		}
+	}
+	,get: function() {
+		return this.crc ^ -1;
+	}
+	,__class__: haxe_crypto_Crc32
 };
 var haxe_crypto_Md5 = function() {
 };
@@ -10769,6 +12589,29 @@ haxe_ds_ObjectMap.prototype = {
 	}
 	,__class__: haxe_ds_ObjectMap
 };
+var haxe_ds__$StringMap_StringMapIterator = function(map,keys) {
+	this.map = map;
+	this.keys = keys;
+	this.index = 0;
+	this.count = keys.length;
+};
+$hxClasses["haxe.ds._StringMap.StringMapIterator"] = haxe_ds__$StringMap_StringMapIterator;
+haxe_ds__$StringMap_StringMapIterator.__name__ = true;
+haxe_ds__$StringMap_StringMapIterator.prototype = {
+	hasNext: function() {
+		return this.index < this.count;
+	}
+	,next: function() {
+		var _this = this.map;
+		var key = this.keys[this.index++];
+		if(__map_reserved[key] != null) {
+			return _this.getReserved(key);
+		} else {
+			return _this.h[key];
+		}
+	}
+	,__class__: haxe_ds__$StringMap_StringMapIterator
+};
 var haxe_ds_StringMap = function() {
 	this.h = { };
 };
@@ -10849,57 +12692,182 @@ haxe_ds_StringMap.prototype = {
 		}
 		return out;
 	}
+	,iterator: function() {
+		return new haxe_ds__$StringMap_StringMapIterator(this,this.arrayKeys());
+	}
 	,__class__: haxe_ds_StringMap
 };
-var haxe_io_Bytes = function(data) {
-	this.length = data.byteLength;
-	this.b = new Uint8Array(data);
-	this.b.bufferValue = data;
-	data.hxBytes = this;
-	data.bytes = this.b;
+var haxe_io_BytesBuffer = function() {
+	this.b = [];
 };
-$hxClasses["haxe.io.Bytes"] = haxe_io_Bytes;
-haxe_io_Bytes.__name__ = true;
-haxe_io_Bytes.ofString = function(s) {
-	var a = [];
-	var i = 0;
-	while(i < s.length) {
-		var c = s.charCodeAt(i++);
-		if(55296 <= c && c <= 56319) {
-			c = c - 55232 << 10 | s.charCodeAt(i++) & 1023;
-		}
-		if(c <= 127) {
-			a.push(c);
-		} else if(c <= 2047) {
-			a.push(192 | c >> 6);
-			a.push(128 | c & 63);
-		} else if(c <= 65535) {
-			a.push(224 | c >> 12);
-			a.push(128 | c >> 6 & 63);
-			a.push(128 | c & 63);
-		} else {
-			a.push(240 | c >> 18);
-			a.push(128 | c >> 12 & 63);
-			a.push(128 | c >> 6 & 63);
-			a.push(128 | c & 63);
-		}
+$hxClasses["haxe.io.BytesBuffer"] = haxe_io_BytesBuffer;
+haxe_io_BytesBuffer.__name__ = true;
+haxe_io_BytesBuffer.prototype = {
+	getBytes: function() {
+		var bytes = new haxe_io_Bytes(new Uint8Array(this.b).buffer);
+		this.b = null;
+		return bytes;
 	}
-	return new haxe_io_Bytes(new Uint8Array(a).buffer);
+	,__class__: haxe_io_BytesBuffer
 };
-haxe_io_Bytes.prototype = {
-	blit: function(pos,src,srcpos,len) {
-		if(pos < 0 || srcpos < 0 || len < 0 || pos + len > this.length || srcpos + len > src.length) {
+var haxe_io_Input = function() { };
+$hxClasses["haxe.io.Input"] = haxe_io_Input;
+haxe_io_Input.__name__ = true;
+haxe_io_Input.prototype = {
+	readByte: function() {
+		throw new js__$Boot_HaxeError("Not implemented");
+	}
+	,readBytes: function(s,pos,len) {
+		var k = len;
+		var b = s.b;
+		if(pos < 0 || len < 0 || pos + len > s.length) {
 			throw new js__$Boot_HaxeError(haxe_io_Error.OutsideBounds);
 		}
-		if(srcpos == 0 && len == src.b.byteLength) {
-			this.b.set(src.b,pos);
-		} else {
-			this.b.set(src.b.subarray(srcpos,srcpos + len),pos);
+		try {
+			while(k > 0) {
+				b[pos] = this.readByte();
+				++pos;
+				--k;
+			}
+		} catch( eof ) {
+			if (eof instanceof js__$Boot_HaxeError) eof = eof.val;
+			if( js_Boot.__instanceof(eof,haxe_io_Eof) ) {
+			} else throw(eof);
+		}
+		return len - k;
+	}
+	,set_bigEndian: function(b) {
+		this.bigEndian = b;
+		return b;
+	}
+	,readFullBytes: function(s,pos,len) {
+		while(len > 0) {
+			var k = this.readBytes(s,pos,len);
+			if(k == 0) {
+				throw new js__$Boot_HaxeError(haxe_io_Error.Blocked);
+			}
+			pos += k;
+			len -= k;
 		}
 	}
-	,__class__: haxe_io_Bytes
+	,read: function(nbytes) {
+		var s = new haxe_io_Bytes(new ArrayBuffer(nbytes));
+		var p = 0;
+		while(nbytes > 0) {
+			var k = this.readBytes(s,p,nbytes);
+			if(k == 0) {
+				throw new js__$Boot_HaxeError(haxe_io_Error.Blocked);
+			}
+			p += k;
+			nbytes -= k;
+		}
+		return s;
+	}
+	,readUInt16: function() {
+		var ch1 = this.readByte();
+		var ch2 = this.readByte();
+		if(this.bigEndian) {
+			return ch2 | ch1 << 8;
+		} else {
+			return ch1 | ch2 << 8;
+		}
+	}
+	,readInt32: function() {
+		var ch1 = this.readByte();
+		var ch2 = this.readByte();
+		var ch3 = this.readByte();
+		var ch4 = this.readByte();
+		if(this.bigEndian) {
+			return ch4 | ch3 << 8 | ch2 << 16 | ch1 << 24;
+		} else {
+			return ch1 | ch2 << 8 | ch3 << 16 | ch4 << 24;
+		}
+	}
+	,readString: function(len) {
+		var b = new haxe_io_Bytes(new ArrayBuffer(len));
+		this.readFullBytes(b,0,len);
+		return b.toString();
+	}
+	,__class__: haxe_io_Input
 };
-var haxe_io_Eof = function() { };
+var haxe_io_BytesInput = function(b,pos,len) {
+	if(pos == null) {
+		pos = 0;
+	}
+	if(len == null) {
+		len = b.length - pos;
+	}
+	if(pos < 0 || len < 0 || pos + len > b.length) {
+		throw new js__$Boot_HaxeError(haxe_io_Error.OutsideBounds);
+	}
+	this.b = b.b;
+	this.pos = pos;
+	this.len = len;
+	this.totlen = len;
+};
+$hxClasses["haxe.io.BytesInput"] = haxe_io_BytesInput;
+haxe_io_BytesInput.__name__ = true;
+haxe_io_BytesInput.__super__ = haxe_io_Input;
+haxe_io_BytesInput.prototype = $extend(haxe_io_Input.prototype,{
+	readByte: function() {
+		if(this.len == 0) {
+			throw new js__$Boot_HaxeError(new haxe_io_Eof());
+		}
+		this.len--;
+		return this.b[this.pos++];
+	}
+	,readBytes: function(buf,pos,len) {
+		if(pos < 0 || len < 0 || pos + len > buf.length) {
+			throw new js__$Boot_HaxeError(haxe_io_Error.OutsideBounds);
+		}
+		if(this.len == 0 && len > 0) {
+			throw new js__$Boot_HaxeError(new haxe_io_Eof());
+		}
+		if(this.len < len) {
+			len = this.len;
+		}
+		var b1 = this.b;
+		var b2 = buf.b;
+		var _g1 = 0;
+		var _g = len;
+		while(_g1 < _g) {
+			var i = _g1++;
+			b2[pos + i] = b1[this.pos + i];
+		}
+		this.pos += len;
+		this.len -= len;
+		return len;
+	}
+	,__class__: haxe_io_BytesInput
+});
+var haxe_io_Output = function() { };
+$hxClasses["haxe.io.Output"] = haxe_io_Output;
+haxe_io_Output.__name__ = true;
+var haxe_io_BytesOutput = function() {
+	this.b = new haxe_io_BytesBuffer();
+};
+$hxClasses["haxe.io.BytesOutput"] = haxe_io_BytesOutput;
+haxe_io_BytesOutput.__name__ = true;
+haxe_io_BytesOutput.__super__ = haxe_io_Output;
+haxe_io_BytesOutput.prototype = $extend(haxe_io_Output.prototype,{
+	writeBytes: function(buf,pos,len) {
+		var _this = this.b;
+		if(pos < 0 || len < 0 || pos + len > buf.length) {
+			throw new js__$Boot_HaxeError(haxe_io_Error.OutsideBounds);
+		}
+		var b2 = buf.b;
+		var _g1 = pos;
+		var _g = pos + len;
+		while(_g1 < _g) _this.b.push(b2[_g1++]);
+		return len;
+	}
+	,getBytes: function() {
+		return this.b.getBytes();
+	}
+	,__class__: haxe_io_BytesOutput
+});
+var haxe_io_Eof = function() {
+};
 $hxClasses["haxe.io.Eof"] = haxe_io_Eof;
 haxe_io_Eof.__name__ = true;
 haxe_io_Eof.prototype = {
@@ -10948,6 +12916,36 @@ haxe_io_FPHelper.floatToI32 = function(f) {
 		++exp;
 	}
 	return (f < 0 ? -2147483648 : 0) | exp + 127 << 23 | sig;
+};
+haxe_io_FPHelper.i64ToDouble = function(low,high) {
+	var exp = (high >> 20 & 2047) - 1023;
+	var sig = (high & 1048575) * 4294967296. + (low >>> 31) * 2147483648. + (low & 2147483647);
+	if(sig == 0 && exp == -1023) {
+		return 0.0;
+	}
+	return (1 - (high >>> 31 << 1)) * (1.0 + Math.pow(2,-52) * sig) * Math.pow(2,exp);
+};
+haxe_io_FPHelper.doubleToI64 = function(v) {
+	var i64 = haxe_io_FPHelper.i64tmp;
+	if(v == 0) {
+		i64.low = 0;
+		i64.high = 0;
+	} else if(!isFinite(v)) {
+		if(v > 0) {
+			i64.low = 0;
+			i64.high = 2146435072;
+		} else {
+			i64.low = 0;
+			i64.high = -1048576;
+		}
+	} else {
+		var av = v < 0 ? -v : v;
+		var exp = Math.floor(Math.log(av) / 0.6931471805599453);
+		var sig = Math.round((av / Math.pow(2,exp) - 1) * 4503599627370496.);
+		i64.low = sig | 0;
+		i64.high = (v < 0 ? -2147483648 : 0) | exp + 1023 << 20 | (sig / 4294967296.0 | 0);
+	}
+	return i64;
 };
 var haxe_macro_Binop = $hxClasses["haxe.macro.Binop"] = { __ename__ : true, __constructs__ : ["OpAdd","OpMult","OpDiv","OpSub","OpAssign","OpEq","OpNotEq","OpGt","OpGte","OpLt","OpLte","OpAnd","OpOr","OpXor","OpBoolAnd","OpBoolOr","OpShl","OpShr","OpUShr","OpMod","OpAssignOp","OpInterval","OpArrow"] };
 haxe_macro_Binop.OpAdd = ["OpAdd",0];
@@ -11035,6 +13033,525 @@ haxe_macro_Unop.OpNegBits = ["OpNegBits",4];
 haxe_macro_Unop.OpNegBits.toString = $estr;
 haxe_macro_Unop.OpNegBits.__enum__ = haxe_macro_Unop;
 haxe_macro_Unop.__empty_constructs__ = [haxe_macro_Unop.OpIncrement,haxe_macro_Unop.OpDecrement,haxe_macro_Unop.OpNot,haxe_macro_Unop.OpNeg,haxe_macro_Unop.OpNegBits];
+var haxe_zip_Huffman = $hxClasses["haxe.zip.Huffman"] = { __ename__ : true, __constructs__ : ["Found","NeedBit","NeedBits"] };
+haxe_zip_Huffman.Found = function(i) { var $x = ["Found",0,i]; $x.__enum__ = haxe_zip_Huffman; $x.toString = $estr; return $x; };
+haxe_zip_Huffman.NeedBit = function(left,right) { var $x = ["NeedBit",1,left,right]; $x.__enum__ = haxe_zip_Huffman; $x.toString = $estr; return $x; };
+haxe_zip_Huffman.NeedBits = function(n,table) { var $x = ["NeedBits",2,n,table]; $x.__enum__ = haxe_zip_Huffman; $x.toString = $estr; return $x; };
+haxe_zip_Huffman.__empty_constructs__ = [];
+var haxe_zip_HuffTools = function() {
+};
+$hxClasses["haxe.zip.HuffTools"] = haxe_zip_HuffTools;
+haxe_zip_HuffTools.__name__ = true;
+haxe_zip_HuffTools.prototype = {
+	treeDepth: function(t) {
+		switch(t[1]) {
+		case 0:
+			return 0;
+		case 1:
+			var da = this.treeDepth(t[2]);
+			var db = this.treeDepth(t[3]);
+			return 1 + (da < db ? da : db);
+		case 2:
+			throw new js__$Boot_HaxeError("assert");
+			break;
+		}
+	}
+	,treeCompress: function(t) {
+		var d = this.treeDepth(t);
+		if(d == 0) {
+			return t;
+		}
+		if(d == 1) {
+			if(t[1] == 1) {
+				return haxe_zip_Huffman.NeedBit(this.treeCompress(t[2]),this.treeCompress(t[3]));
+			} else {
+				throw new js__$Boot_HaxeError("assert");
+			}
+		}
+		var size = 1 << d;
+		var table = [];
+		var _g1 = 0;
+		while(_g1 < size) {
+			++_g1;
+			table.push(haxe_zip_Huffman.Found(-1));
+		}
+		this.treeWalk(table,0,0,d,t);
+		return haxe_zip_Huffman.NeedBits(d,table);
+	}
+	,treeWalk: function(table,p,cd,d,t) {
+		if(t[1] == 1) {
+			if(d > 0) {
+				this.treeWalk(table,p,cd + 1,d - 1,t[2]);
+				this.treeWalk(table,p | 1 << cd,cd + 1,d - 1,t[3]);
+			} else {
+				table[p] = this.treeCompress(t);
+			}
+		} else {
+			table[p] = this.treeCompress(t);
+		}
+	}
+	,treeMake: function(bits,maxbits,v,len) {
+		if(len > maxbits) {
+			throw new js__$Boot_HaxeError("Invalid huffman");
+		}
+		var idx = v << 5 | len;
+		if(bits.h.hasOwnProperty(idx)) {
+			return haxe_zip_Huffman.Found(bits.h[idx]);
+		}
+		v <<= 1;
+		++len;
+		return haxe_zip_Huffman.NeedBit(this.treeMake(bits,maxbits,v,len),this.treeMake(bits,maxbits,v | 1,len));
+	}
+	,make: function(lengths,pos,nlengths,maxbits) {
+		var counts = [];
+		var tmp = [];
+		if(maxbits > 32) {
+			throw new js__$Boot_HaxeError("Invalid huffman");
+		}
+		var _g1 = 0;
+		while(_g1 < maxbits) {
+			++_g1;
+			counts.push(0);
+			tmp.push(0);
+		}
+		var _g11 = 0;
+		while(_g11 < nlengths) {
+			var p = lengths[_g11++ + pos];
+			if(p >= maxbits) {
+				throw new js__$Boot_HaxeError("Invalid huffman");
+			}
+			counts[p]++;
+		}
+		var code = 0;
+		var _g12 = 1;
+		var _g = maxbits - 1;
+		while(_g12 < _g) {
+			var i = _g12++;
+			code = code + counts[i] << 1;
+			tmp[i] = code;
+		}
+		var bits = new haxe_ds_IntMap();
+		var _g13 = 0;
+		while(_g13 < nlengths) {
+			var i1 = _g13++;
+			var l = lengths[i1 + pos];
+			if(l != 0) {
+				var n = tmp[l - 1];
+				tmp[l - 1] = n + 1;
+				bits.h[n << 5 | l] = i1;
+			}
+		}
+		return this.treeCompress(haxe_zip_Huffman.NeedBit(this.treeMake(bits,maxbits,0,1),this.treeMake(bits,maxbits,1,1)));
+	}
+	,__class__: haxe_zip_HuffTools
+};
+var haxe_zip__$InflateImpl_Window = function(hasCrc) {
+	this.buffer = new haxe_io_Bytes(new ArrayBuffer(65536));
+	this.pos = 0;
+	if(hasCrc) {
+		this.crc = new haxe_crypto_Adler32();
+	}
+};
+$hxClasses["haxe.zip._InflateImpl.Window"] = haxe_zip__$InflateImpl_Window;
+haxe_zip__$InflateImpl_Window.__name__ = true;
+haxe_zip__$InflateImpl_Window.prototype = {
+	slide: function() {
+		if(this.crc != null) {
+			this.crc.update(this.buffer,0,32768);
+		}
+		var b = new haxe_io_Bytes(new ArrayBuffer(65536));
+		this.pos -= 32768;
+		b.blit(0,this.buffer,32768,this.pos);
+		this.buffer = b;
+	}
+	,addBytes: function(b,p,len) {
+		if(this.pos + len > 65536) {
+			this.slide();
+		}
+		this.buffer.blit(this.pos,b,p,len);
+		this.pos += len;
+	}
+	,addByte: function(c) {
+		if(this.pos == 65536) {
+			this.slide();
+		}
+		this.buffer.b[this.pos] = c & 255;
+		this.pos++;
+	}
+	,getLastChar: function() {
+		return this.buffer.b[this.pos - 1];
+	}
+	,available: function() {
+		return this.pos;
+	}
+	,checksum: function() {
+		if(this.crc != null) {
+			this.crc.update(this.buffer,0,this.pos);
+		}
+		return this.crc;
+	}
+	,__class__: haxe_zip__$InflateImpl_Window
+};
+var haxe_zip__$InflateImpl_State = $hxClasses["haxe.zip._InflateImpl.State"] = { __ename__ : true, __constructs__ : ["Head","Block","CData","Flat","Crc","Dist","DistOne","Done"] };
+haxe_zip__$InflateImpl_State.Head = ["Head",0];
+haxe_zip__$InflateImpl_State.Head.toString = $estr;
+haxe_zip__$InflateImpl_State.Head.__enum__ = haxe_zip__$InflateImpl_State;
+haxe_zip__$InflateImpl_State.Block = ["Block",1];
+haxe_zip__$InflateImpl_State.Block.toString = $estr;
+haxe_zip__$InflateImpl_State.Block.__enum__ = haxe_zip__$InflateImpl_State;
+haxe_zip__$InflateImpl_State.CData = ["CData",2];
+haxe_zip__$InflateImpl_State.CData.toString = $estr;
+haxe_zip__$InflateImpl_State.CData.__enum__ = haxe_zip__$InflateImpl_State;
+haxe_zip__$InflateImpl_State.Flat = ["Flat",3];
+haxe_zip__$InflateImpl_State.Flat.toString = $estr;
+haxe_zip__$InflateImpl_State.Flat.__enum__ = haxe_zip__$InflateImpl_State;
+haxe_zip__$InflateImpl_State.Crc = ["Crc",4];
+haxe_zip__$InflateImpl_State.Crc.toString = $estr;
+haxe_zip__$InflateImpl_State.Crc.__enum__ = haxe_zip__$InflateImpl_State;
+haxe_zip__$InflateImpl_State.Dist = ["Dist",5];
+haxe_zip__$InflateImpl_State.Dist.toString = $estr;
+haxe_zip__$InflateImpl_State.Dist.__enum__ = haxe_zip__$InflateImpl_State;
+haxe_zip__$InflateImpl_State.DistOne = ["DistOne",6];
+haxe_zip__$InflateImpl_State.DistOne.toString = $estr;
+haxe_zip__$InflateImpl_State.DistOne.__enum__ = haxe_zip__$InflateImpl_State;
+haxe_zip__$InflateImpl_State.Done = ["Done",7];
+haxe_zip__$InflateImpl_State.Done.toString = $estr;
+haxe_zip__$InflateImpl_State.Done.__enum__ = haxe_zip__$InflateImpl_State;
+haxe_zip__$InflateImpl_State.__empty_constructs__ = [haxe_zip__$InflateImpl_State.Head,haxe_zip__$InflateImpl_State.Block,haxe_zip__$InflateImpl_State.CData,haxe_zip__$InflateImpl_State.Flat,haxe_zip__$InflateImpl_State.Crc,haxe_zip__$InflateImpl_State.Dist,haxe_zip__$InflateImpl_State.DistOne,haxe_zip__$InflateImpl_State.Done];
+var haxe_zip_InflateImpl = function(i,header,crc) {
+	if(crc == null) {
+		crc = true;
+	}
+	if(header == null) {
+		header = true;
+	}
+	this["final"] = false;
+	this.htools = new haxe_zip_HuffTools();
+	this.huffman = this.buildFixedHuffman();
+	this.huffdist = null;
+	this.len = 0;
+	this.dist = 0;
+	this.state = header ? haxe_zip__$InflateImpl_State.Head : haxe_zip__$InflateImpl_State.Block;
+	this.input = i;
+	this.bits = 0;
+	this.nbits = 0;
+	this.needed = 0;
+	this.output = null;
+	this.outpos = 0;
+	this.lengths = [];
+	var _g = 0;
+	while(_g < 19) {
+		++_g;
+		this.lengths.push(-1);
+	}
+	this.window = new haxe_zip__$InflateImpl_Window(crc);
+};
+$hxClasses["haxe.zip.InflateImpl"] = haxe_zip_InflateImpl;
+haxe_zip_InflateImpl.__name__ = true;
+haxe_zip_InflateImpl.run = function(i,bufsize) {
+	if(bufsize == null) {
+		bufsize = 65536;
+	}
+	var buf = new haxe_io_Bytes(new ArrayBuffer(bufsize));
+	var output = new haxe_io_BytesBuffer();
+	var inflate = new haxe_zip_InflateImpl(i);
+	while(true) {
+		var len = inflate.readBytes(buf,0,bufsize);
+		if(len < 0 || len > buf.length) {
+			throw new js__$Boot_HaxeError(haxe_io_Error.OutsideBounds);
+		}
+		var b2 = buf.b;
+		var _g1 = 0;
+		while(_g1 < len) output.b.push(b2[_g1++]);
+		if(len < bufsize) {
+			break;
+		}
+	}
+	return output.getBytes();
+};
+haxe_zip_InflateImpl.prototype = {
+	buildFixedHuffman: function() {
+		if(haxe_zip_InflateImpl.FIXED_HUFFMAN != null) {
+			return haxe_zip_InflateImpl.FIXED_HUFFMAN;
+		}
+		var a = [];
+		var _g = 0;
+		while(_g < 288) {
+			var n = _g++;
+			a.push(n <= 143 ? 8 : n <= 255 ? 9 : n <= 279 ? 7 : 8);
+		}
+		haxe_zip_InflateImpl.FIXED_HUFFMAN = this.htools.make(a,0,288,10);
+		return haxe_zip_InflateImpl.FIXED_HUFFMAN;
+	}
+	,readBytes: function(b,pos,len) {
+		this.needed = len;
+		this.outpos = pos;
+		this.output = b;
+		if(len > 0) {
+			while(this.inflateLoop()) {
+			}
+		}
+		return len - this.needed;
+	}
+	,getBits: function(n) {
+		while(this.nbits < n) {
+			this.bits |= this.input.readByte() << this.nbits;
+			this.nbits += 8;
+		}
+		var b = this.bits & (1 << n) - 1;
+		this.nbits -= n;
+		this.bits >>= n;
+		return b;
+	}
+	,getBit: function() {
+		if(this.nbits == 0) {
+			this.nbits = 8;
+			this.bits = this.input.readByte();
+		}
+		var b = (this.bits & 1) == 1;
+		this.nbits--;
+		this.bits >>= 1;
+		return b;
+	}
+	,getRevBits: function(n) {
+		if(n == 0) {
+			return 0;
+		} else if(this.getBit()) {
+			return 1 << n - 1 | this.getRevBits(n - 1);
+		} else {
+			return this.getRevBits(n - 1);
+		}
+	}
+	,resetBits: function() {
+		this.bits = 0;
+		this.nbits = 0;
+	}
+	,addBytes: function(b,p,len) {
+		this.window.addBytes(b,p,len);
+		this.output.blit(this.outpos,b,p,len);
+		this.needed -= len;
+		this.outpos += len;
+	}
+	,addByte: function(b) {
+		this.window.addByte(b);
+		this.output.b[this.outpos] = b & 255;
+		this.needed--;
+		this.outpos++;
+	}
+	,addDistOne: function(n) {
+		var c = this.window.getLastChar();
+		var _g1 = 0;
+		while(_g1 < n) {
+			++_g1;
+			this.addByte(c);
+		}
+	}
+	,addDist: function(d,len) {
+		this.addBytes(this.window.buffer,this.window.pos - d,len);
+	}
+	,applyHuffman: function(h) {
+		switch(h[1]) {
+		case 0:
+			return h[2];
+		case 1:
+			return this.applyHuffman(this.getBit() ? h[3] : h[2]);
+		case 2:
+			return this.applyHuffman(h[3][this.getBits(h[2])]);
+		}
+	}
+	,inflateLengths: function(a,max) {
+		var i = 0;
+		var prev = 0;
+		while(i < max) {
+			var n = this.applyHuffman(this.huffman);
+			switch(n) {
+			case 0:case 1:case 2:case 3:case 4:case 5:case 6:case 7:case 8:case 9:case 10:case 11:case 12:case 13:case 14:case 15:
+				prev = n;
+				a[i] = n;
+				++i;
+				break;
+			case 16:
+				var end = i + 3 + this.getBits(2);
+				if(end > max) {
+					throw new js__$Boot_HaxeError("Invalid data");
+				}
+				while(i < end) {
+					a[i] = prev;
+					++i;
+				}
+				break;
+			case 17:
+				i += 3 + this.getBits(3);
+				if(i > max) {
+					throw new js__$Boot_HaxeError("Invalid data");
+				}
+				break;
+			case 18:
+				i += 11 + this.getBits(7);
+				if(i > max) {
+					throw new js__$Boot_HaxeError("Invalid data");
+				}
+				break;
+			default:
+				throw new js__$Boot_HaxeError("Invalid data");
+			}
+		}
+	}
+	,inflateLoop: function() {
+		switch(this.state[1]) {
+		case 0:
+			var cmf = this.input.readByte();
+			if((cmf & 15) != 8) {
+				throw new js__$Boot_HaxeError("Invalid data");
+			}
+			var flg = this.input.readByte();
+			if(((cmf << 8) + flg) % 31 != 0) {
+				throw new js__$Boot_HaxeError("Invalid data");
+			}
+			if((flg & 32) != 0) {
+				throw new js__$Boot_HaxeError("Unsupported dictionary");
+			}
+			this.state = haxe_zip__$InflateImpl_State.Block;
+			return true;
+		case 1:
+			this["final"] = this.getBit();
+			switch(this.getBits(2)) {
+			case 0:
+				this.len = this.input.readUInt16();
+				if(this.input.readUInt16() != 65535 - this.len) {
+					throw new js__$Boot_HaxeError("Invalid data");
+				}
+				this.state = haxe_zip__$InflateImpl_State.Flat;
+				var r = this.inflateLoop();
+				this.resetBits();
+				return r;
+			case 1:
+				this.huffman = this.buildFixedHuffman();
+				this.huffdist = null;
+				this.state = haxe_zip__$InflateImpl_State.CData;
+				return true;
+			case 2:
+				var hlit = this.getBits(5) + 257;
+				var hdist = this.getBits(5) + 1;
+				var hclen = this.getBits(4) + 4;
+				var _g1 = 0;
+				while(_g1 < hclen) this.lengths[haxe_zip_InflateImpl.CODE_LENGTHS_POS[_g1++]] = this.getBits(3);
+				var _g = hclen;
+				while(_g < 19) this.lengths[haxe_zip_InflateImpl.CODE_LENGTHS_POS[_g++]] = 0;
+				this.huffman = this.htools.make(this.lengths,0,19,8);
+				var lengths = [];
+				var _g11 = 0;
+				var _g2 = hlit + hdist;
+				while(_g11 < _g2) {
+					++_g11;
+					lengths.push(0);
+				}
+				this.inflateLengths(lengths,hlit + hdist);
+				this.huffdist = this.htools.make(lengths,hlit,hdist,16);
+				this.huffman = this.htools.make(lengths,0,hlit,16);
+				this.state = haxe_zip__$InflateImpl_State.CData;
+				return true;
+			default:
+				throw new js__$Boot_HaxeError("Invalid data");
+			}
+			break;
+		case 2:
+			var n = this.applyHuffman(this.huffman);
+			if(n < 256) {
+				this.addByte(n);
+				return this.needed > 0;
+			} else if(n == 256) {
+				this.state = this["final"] ? haxe_zip__$InflateImpl_State.Crc : haxe_zip__$InflateImpl_State.Block;
+				return true;
+			} else {
+				n -= 257;
+				var extra_bits = haxe_zip_InflateImpl.LEN_EXTRA_BITS_TBL[n];
+				if(extra_bits == -1) {
+					throw new js__$Boot_HaxeError("Invalid data");
+				}
+				this.len = haxe_zip_InflateImpl.LEN_BASE_VAL_TBL[n] + this.getBits(extra_bits);
+				var dist_code = this.huffdist == null ? this.getRevBits(5) : this.applyHuffman(this.huffdist);
+				extra_bits = haxe_zip_InflateImpl.DIST_EXTRA_BITS_TBL[dist_code];
+				if(extra_bits == -1) {
+					throw new js__$Boot_HaxeError("Invalid data");
+				}
+				this.dist = haxe_zip_InflateImpl.DIST_BASE_VAL_TBL[dist_code] + this.getBits(extra_bits);
+				if(this.dist > this.window.available()) {
+					throw new js__$Boot_HaxeError("Invalid data");
+				}
+				this.state = this.dist == 1 ? haxe_zip__$InflateImpl_State.DistOne : haxe_zip__$InflateImpl_State.Dist;
+				return true;
+			}
+			break;
+		case 3:
+			var rlen = this.len < this.needed ? this.len : this.needed;
+			var bytes = this.input.read(rlen);
+			this.len -= rlen;
+			this.addBytes(bytes,0,rlen);
+			if(this.len == 0) {
+				this.state = this["final"] ? haxe_zip__$InflateImpl_State.Crc : haxe_zip__$InflateImpl_State.Block;
+			}
+			return this.needed > 0;
+		case 4:
+			var calc = this.window.checksum();
+			if(calc == null) {
+				this.state = haxe_zip__$InflateImpl_State.Done;
+				return true;
+			}
+			if(!calc.equals(haxe_crypto_Adler32.read(this.input))) {
+				throw new js__$Boot_HaxeError("Invalid CRC");
+			}
+			this.state = haxe_zip__$InflateImpl_State.Done;
+			return true;
+		case 5:
+			while(this.len > 0 && this.needed > 0) {
+				var rdist = this.len < this.dist ? this.len : this.dist;
+				var rlen1 = this.needed < rdist ? this.needed : rdist;
+				this.addDist(this.dist,rlen1);
+				this.len -= rlen1;
+			}
+			if(this.len == 0) {
+				this.state = haxe_zip__$InflateImpl_State.CData;
+			}
+			return this.needed > 0;
+		case 6:
+			var rlen2 = this.len < this.needed ? this.len : this.needed;
+			this.addDistOne(rlen2);
+			this.len -= rlen2;
+			if(this.len == 0) {
+				this.state = haxe_zip__$InflateImpl_State.CData;
+			}
+			return this.needed > 0;
+		case 7:
+			return false;
+		}
+	}
+	,__class__: haxe_zip_InflateImpl
+};
+var haxe_zip_Uncompress = function() { };
+$hxClasses["haxe.zip.Uncompress"] = haxe_zip_Uncompress;
+haxe_zip_Uncompress.__name__ = true;
+haxe_zip_Uncompress.run = function(src,bufsize) {
+	return haxe_zip_InflateImpl.run(new haxe_io_BytesInput(src),bufsize);
+};
+var hxd_BitmapData = function(width,height) {
+	if(!(width == -101 && height == -102)) {
+		var canvas = window.document.createElement("canvas");
+		canvas.width = width;
+		canvas.height = height;
+		this.ctx = canvas.getContext("2d",null);
+	}
+};
+$hxClasses["hxd.BitmapData"] = hxd_BitmapData;
+hxd_BitmapData.__name__ = true;
+hxd_BitmapData.prototype = {
+	getPixels: function() {
+		var w = this.ctx.canvas.width;
+		var h = this.ctx.canvas.height;
+		return new hxd_Pixels(w,h,haxe_io_Bytes.ofData(this.ctx.getImageData(0,0,w,h).data.buffer),hxd_PixelFormat.RGBA);
+	}
+	,__class__: hxd_BitmapData
+};
 var hxd_EventKind = $hxClasses["hxd.EventKind"] = { __ename__ : true, __constructs__ : ["EPush","ERelease","EMove","EOver","EOut","EWheel","EFocus","EFocusLost","EKeyDown","EKeyUp","EReleaseOutside","ECheck"] };
 hxd_EventKind.EPush = ["EPush",0];
 hxd_EventKind.EPush.toString = $estr;
@@ -11183,12 +13700,92 @@ hxd_Pixels.prototype = {
 		this.bpp = hxd_Pixels.bytesPerPixel(fmt);
 		return fmt;
 	}
+	,makeSquare: function(copy) {
+		var w = this.width;
+		var h = this.height;
+		var tw = w == 0 ? 0 : 1;
+		var th = h == 0 ? 0 : 1;
+		while(tw < w) tw <<= 1;
+		while(th < h) th <<= 1;
+		if(w == tw && h == th) {
+			return this;
+		}
+		var out = hxd_impl_Tmp.getBytes(tw * th * 4);
+		var p = 0;
+		var b = this.offset;
+		var _g1 = 0;
+		while(_g1 < h) {
+			++_g1;
+			out.blit(p,this.bytes,b,w * 4);
+			p += w * 4;
+			b += w * 4;
+			var _g3 = 0;
+			var _g2 = tw - w;
+			while(_g3 < _g2) {
+				++_g3;
+				out.setInt32(p,0);
+				p += 4;
+			}
+		}
+		var _g11 = 0;
+		var _g = (th - h) * tw;
+		while(_g11 < _g) {
+			++_g11;
+			out.setInt32(p,0);
+			p += 4;
+		}
+		if(copy) {
+			return new hxd_Pixels(tw,th,out,this.innerFormat);
+		}
+		if((this.flags & 1) == 0) {
+			hxd_impl_Tmp.saveBytes(this.bytes);
+		}
+		this.bytes = out;
+		this.width = tw;
+		this.height = th;
+		return this;
+	}
 	,copyInner: function() {
 		var old = this.bytes;
 		this.bytes = hxd_impl_Tmp.getBytes(this.width * this.height * 4);
 		this.bytes.blit(0,old,this.offset,this.width * this.height * 4);
 		this.offset = 0;
 		this.flags &= 268435454;
+	}
+	,setFlip: function(b) {
+		if(b == null) {
+			b = false;
+		}
+		if((this.flags & 4) != 0 == b) {
+			return;
+		}
+		if((this.flags & 1) != 0) {
+			this.copyInner();
+		}
+		if(b) {
+			this.flags |= 4;
+		} else {
+			this.flags &= 268435451;
+		}
+		var stride = this.width * this.bpp;
+		var _g1 = 0;
+		var _g = this.height >> 1;
+		while(_g1 < _g) {
+			var y = _g1++;
+			var p1 = y * stride;
+			var p2 = (this.height - 1 - y) * stride;
+			var _g3 = 0;
+			var _g2 = stride >> 2;
+			while(_g3 < _g2) {
+				++_g3;
+				var a = this.bytes.getInt32(p1);
+				var b1 = this.bytes.getInt32(p2);
+				this.bytes.setInt32(p1,b1);
+				this.bytes.setInt32(p2,a);
+				p1 += 4;
+				p2 += 4;
+			}
+		}
 	}
 	,convert: function(target) {
 		if(this.innerFormat == target) {
@@ -11314,6 +13911,12 @@ hxd_Pixels.prototype = {
 		}
 	}
 	,__class__: hxd_Pixels
+};
+var hxd_Res = function() { };
+$hxClasses["hxd.Res"] = hxd_Res;
+hxd_Res.__name__ = true;
+hxd_Res.set_loader = function(l) {
+	return hxd_res_Loader.currentInstance = l;
 };
 var hxd_SceneEvents = function() {
 	this.onOut = new hxd_Event(hxd_EventKind.EOut);
@@ -12762,6 +15365,220 @@ hxd_earcut_Earcut.prototype = {
 	}
 	,__class__: hxd_earcut_Earcut
 };
+var hxd_fs_FileEntry = function() { };
+$hxClasses["hxd.fs.FileEntry"] = hxd_fs_FileEntry;
+hxd_fs_FileEntry.__name__ = true;
+hxd_fs_FileEntry.prototype = {
+	getBytes: function() {
+		return null;
+	}
+	,open: function() {
+	}
+	,skip: function(nbytes) {
+	}
+	,readByte: function() {
+		return 0;
+	}
+	,read: function(out,pos,size) {
+	}
+	,close: function() {
+	}
+	,load: function(onReady) {
+		if(!this.get_isAvailable()) {
+			throw new js__$Boot_HaxeError("load() not implemented");
+		} else if(onReady != null) {
+			onReady();
+		}
+	}
+	,loadBitmap: function(onLoaded) {
+		throw new js__$Boot_HaxeError("loadBitmap() not implemented");
+	}
+	,get_isAvailable: function() {
+		return true;
+	}
+	,get_path: function() {
+		throw new js__$Boot_HaxeError("path() not implemented");
+	}
+	,get_extension: function() {
+		var np = this.name.split(".");
+		if(np.length == 1) {
+			return "";
+		} else {
+			return np.pop().toLowerCase();
+		}
+	}
+	,__class__: hxd_fs_FileEntry
+};
+var hxd_fs_FileSystem = function() { };
+$hxClasses["hxd.fs.FileSystem"] = hxd_fs_FileSystem;
+hxd_fs_FileSystem.__name__ = true;
+hxd_fs_FileSystem.prototype = {
+	__class__: hxd_fs_FileSystem
+};
+var hxd_fs__$EmbedFileSystem_EmbedEntry = function(fs,name,relPath,data) {
+	this.fs = fs;
+	this.name = name;
+	this.relPath = relPath;
+	this.data = data;
+};
+$hxClasses["hxd.fs._EmbedFileSystem.EmbedEntry"] = hxd_fs__$EmbedFileSystem_EmbedEntry;
+hxd_fs__$EmbedFileSystem_EmbedEntry.__name__ = true;
+hxd_fs__$EmbedFileSystem_EmbedEntry.__super__ = hxd_fs_FileEntry;
+hxd_fs__$EmbedFileSystem_EmbedEntry.prototype = $extend(hxd_fs_FileEntry.prototype,{
+	getBytes: function() {
+		if(this.bytes == null) {
+			this.open();
+		}
+		return this.bytes;
+	}
+	,open: function() {
+		if(this.bytes == null) {
+			this.bytes = haxe_Resource.getBytes(this.data);
+			if(this.bytes == null) {
+				throw new js__$Boot_HaxeError("Missing resource " + this.data);
+			}
+		}
+		this.readPos = 0;
+	}
+	,skip: function(nbytes) {
+		this.readPos += nbytes;
+	}
+	,readByte: function() {
+		return this.bytes.b[this.readPos++];
+	}
+	,read: function(out,pos,size) {
+		out.blit(pos,this.bytes,this.readPos,size);
+		this.readPos += size;
+	}
+	,close: function() {
+		this.bytes = null;
+		this.readPos = 0;
+	}
+	,load: function(onReady) {
+		if(onReady != null) {
+			haxe_Timer.delay(onReady,1);
+		}
+	}
+	,loadBitmap: function(onLoaded) {
+		var rawData = null;
+		var _g = 0;
+		var _g1 = haxe_Resource.content;
+		while(_g < _g1.length) {
+			var res = _g1[_g];
+			++_g;
+			if(res.name == this.data) {
+				rawData = res.data;
+				break;
+			}
+		}
+		if(rawData == null) {
+			throw new js__$Boot_HaxeError("Missing resource " + this.data);
+		}
+		var image = new Image();
+		image.onload = function(_) {
+			onLoaded(image);
+		};
+		var extra = "";
+		var _g11 = 0;
+		var _g2 = (3 - (rawData.length * 6 >> 3) * 4 % 3) % 3;
+		while(_g11 < _g2) {
+			++_g11;
+			extra += "=";
+		}
+		var tmp = "data:image/" + this.get_extension() + ";base64," + rawData;
+		image.src = tmp + extra;
+	}
+	,get_path: function() {
+		if(this.relPath == ".") {
+			return "<root>";
+		} else {
+			return this.relPath;
+		}
+	}
+	,__class__: hxd_fs__$EmbedFileSystem_EmbedEntry
+});
+var hxd_fs_EmbedFileSystem = function(root) {
+	this.root = root;
+};
+$hxClasses["hxd.fs.EmbedFileSystem"] = hxd_fs_EmbedFileSystem;
+hxd_fs_EmbedFileSystem.__name__ = true;
+hxd_fs_EmbedFileSystem.__interfaces__ = [hxd_fs_FileSystem];
+hxd_fs_EmbedFileSystem.resolve = function(path) {
+	return "R_" + path.replace(hxd_fs_EmbedFileSystem.invalidChars.r,"_");
+};
+hxd_fs_EmbedFileSystem.prototype = {
+	splitPath: function(path) {
+		if(path == ".") {
+			return [];
+		} else {
+			return path.split("/");
+		}
+	}
+	,exists: function(path) {
+		var r = this.root;
+		var _g = 0;
+		var _g1 = this.splitPath(path);
+		while(_g < _g1.length) {
+			var p = _g1[_g];
+			++_g;
+			r = Reflect.field(r,p);
+			if(r == null) {
+				return false;
+			}
+		}
+		return true;
+	}
+	,get: function(path) {
+		if(!this.exists(path)) {
+			throw new js__$Boot_HaxeError(new hxd_fs_NotFound(path));
+		}
+		var id = hxd_fs_EmbedFileSystem.resolve(path);
+		return new hxd_fs__$EmbedFileSystem_EmbedEntry(this,path.split("/").pop(),path,id);
+	}
+	,__class__: hxd_fs_EmbedFileSystem
+};
+var hxd_fs_FileInput = function(f) {
+	this.f = f;
+	f.open();
+};
+$hxClasses["hxd.fs.FileInput"] = hxd_fs_FileInput;
+hxd_fs_FileInput.__name__ = true;
+hxd_fs_FileInput.__super__ = haxe_io_Input;
+hxd_fs_FileInput.prototype = $extend(haxe_io_Input.prototype,{
+	skip: function(nbytes) {
+		this.f.skip(nbytes);
+	}
+	,readByte: function() {
+		return this.f.readByte();
+	}
+	,readBytes: function(b,pos,len) {
+		this.f.read(b,pos,len);
+		return len;
+	}
+	,close: function() {
+		this.f.close();
+	}
+	,__class__: hxd_fs_FileInput
+});
+var hxd_fs__$LoadedBitmap_LoadedBitmap_$Impl_$ = {};
+$hxClasses["hxd.fs._LoadedBitmap.LoadedBitmap_Impl_"] = hxd_fs__$LoadedBitmap_LoadedBitmap_$Impl_$;
+hxd_fs__$LoadedBitmap_LoadedBitmap_$Impl_$.__name__ = true;
+hxd_fs__$LoadedBitmap_LoadedBitmap_$Impl_$.toBitmap = function(this1) {
+	var bmp = new hxd_BitmapData(this1.width,this1.height);
+	bmp.ctx.drawImage(this1,0,0);
+	return bmp;
+};
+var hxd_fs_NotFound = function(path) {
+	this.path = path;
+};
+$hxClasses["hxd.fs.NotFound"] = hxd_fs_NotFound;
+hxd_fs_NotFound.__name__ = true;
+hxd_fs_NotFound.prototype = {
+	toString: function() {
+		return "Resource file not found '" + this.path + "'";
+	}
+	,__class__: hxd_fs_NotFound
+};
 var hxd_impl_MemoryReader = function() {
 };
 $hxClasses["hxd.impl.MemoryReader"] = hxd_impl_MemoryReader;
@@ -12832,6 +15649,1055 @@ hxd_impl_Tmp.saveBytes = function(b) {
 		}
 	}
 	hxd_impl_Tmp.bytes.push(b);
+};
+var hxd_res_Resource = function(entry) {
+	this.entry = entry;
+};
+$hxClasses["hxd.res.Resource"] = hxd_res_Resource;
+hxd_res_Resource.__name__ = true;
+hxd_res_Resource.prototype = {
+	watch: function(onChanged) {
+	}
+	,__class__: hxd_res_Resource
+};
+var hxd_res_Any = function(loader,entry) {
+	hxd_res_Resource.call(this,entry);
+	this.loader = loader;
+};
+$hxClasses["hxd.res.Any"] = hxd_res_Any;
+hxd_res_Any.__name__ = true;
+hxd_res_Any.__super__ = hxd_res_Resource;
+hxd_res_Any.prototype = $extend(hxd_res_Resource.prototype,{
+	toImage: function() {
+		return this.loader.loadImage(this.entry.get_path());
+	}
+	,__class__: hxd_res_Any
+});
+var hxd_res_Image = function(entry) {
+	hxd_res_Resource.call(this,entry);
+};
+$hxClasses["hxd.res.Image"] = hxd_res_Image;
+hxd_res_Image.__name__ = true;
+hxd_res_Image.__super__ = hxd_res_Resource;
+hxd_res_Image.prototype = $extend(hxd_res_Resource.prototype,{
+	getFormat: function() {
+		this.getSize();
+		return this.inf.format;
+	}
+	,getSize: function() {
+		if(this.inf != null) {
+			return this.inf;
+		}
+		var f = new hxd_fs_FileInput(this.entry);
+		var width = 0;
+		var height = 0;
+		var format;
+		switch(f.readUInt16()) {
+		case 18759:
+			format = 2;
+			f.readInt32();
+			width = f.readUInt16();
+			height = f.readUInt16();
+			break;
+		case 20617:
+			format = 1;
+			f.set_bigEndian(true);
+			f.skip(6);
+			while(true) {
+				var dataLen = f.readInt32();
+				if(f.readInt32() == 1229472850) {
+					width = f.readInt32();
+					height = f.readInt32();
+					break;
+				}
+				f.skip(dataLen + 4);
+			}
+			break;
+		case 55551:
+			format = 0;
+			f.set_bigEndian(true);
+			try {
+				while(true) switch(f.readUInt16()) {
+				case 65472:case 65474:
+					f.readUInt16();
+					f.readByte();
+					height = f.readUInt16();
+					width = f.readUInt16();
+					throw "__break__";
+					break;
+				default:
+					f.skip(f.readUInt16() - 2);
+				}
+			} catch( e ) { if( e != "__break__" ) throw e; }
+			break;
+		default:
+			throw new js__$Boot_HaxeError("Unsupported texture format " + this.entry.get_path());
+		}
+		f.close();
+		this.inf = { width : width, height : height, format : format};
+		return this.inf;
+	}
+	,getPixels: function(fmt,flipY) {
+		this.getSize();
+		var pixels;
+		switch(this.inf.format) {
+		case 0:
+			var bytes = this.entry.getBytes();
+			var p;
+			try {
+				p = hxd_res_NanoJpeg.decode(bytes);
+			} catch( e ) {
+				if (e instanceof js__$Boot_HaxeError) e = e.val;
+				throw new js__$Boot_HaxeError("Failed to decode JPG " + this.entry.get_path() + " (" + Std.string(e) + ")");
+			}
+			pixels = new hxd_Pixels(p.width,p.height,p.pixels,hxd_PixelFormat.BGRA);
+			break;
+		case 1:
+			var png = new format_png_Reader(new haxe_io_BytesInput(this.entry.getBytes()));
+			png.checkCRC = false;
+			pixels = hxd_Pixels.alloc(this.inf.width,this.inf.height,hxd_PixelFormat.BGRA);
+			var pdata = png.read();
+			try {
+				format_png_Tools.extract32(pdata,pixels.bytes,flipY);
+			} catch( e1 ) {
+				hxd_impl_Tmp.freeMemory();
+				format_png_Tools.extract32(pdata,pixels.bytes,flipY);
+			}
+			if(flipY) {
+				pixels.flags |= 4;
+			}
+			break;
+		case 2:
+			var gif = new format_gif_Reader(new haxe_io_BytesInput(this.entry.getBytes())).read();
+			pixels = new hxd_Pixels(this.inf.width,this.inf.height,format_gif_Tools.extractFullBGRA(gif,0),hxd_PixelFormat.BGRA);
+			break;
+		}
+		if(fmt != null) {
+			pixels.convert(fmt);
+		}
+		if(flipY != null) {
+			pixels.setFlip(flipY);
+		}
+		return pixels;
+	}
+	,watchCallb: function() {
+		var w = this.inf.width;
+		var h = this.inf.height;
+		this.inf = null;
+		var s = this.getSize();
+		if(w != s.width || h != s.height) {
+			this.tex.resize(w,h);
+		}
+		this.tex.realloc = null;
+		this.loadTexture();
+	}
+	,loadTexture: function() {
+		var _gthis = this;
+		if(this.getFormat() != 0) {
+			var load = function() {
+				_gthis.tex.alloc();
+				var pixels = _gthis.getPixels(h3d_mat_Texture.nativeFormat,false);
+				if(pixels.width != _gthis.tex.width || pixels.height != _gthis.tex.height) {
+					pixels.makeSquare();
+				}
+				_gthis.tex.uploadPixels(pixels);
+				pixels.dispose();
+				_gthis.tex.realloc = $bind(_gthis,_gthis.loadTexture);
+				_gthis.watch($bind(_gthis,_gthis.watchCallb));
+			};
+			if(this.entry.get_isAvailable()) {
+				load();
+			} else {
+				this.entry.load(load);
+			}
+		} else {
+			this.tex.flags |= 256;
+			this.entry.loadBitmap(function(bmp) {
+				var bmp1 = hxd_fs__$LoadedBitmap_LoadedBitmap_$Impl_$.toBitmap(bmp);
+				_gthis.tex.alloc();
+				if(bmp1.ctx.canvas.width != _gthis.tex.width || bmp1.ctx.canvas.height != _gthis.tex.height) {
+					var pixels1 = bmp1.getPixels();
+					pixels1.makeSquare();
+					_gthis.tex.uploadPixels(pixels1);
+					pixels1.dispose();
+				} else {
+					_gthis.tex.uploadBitmap(bmp1);
+				}
+				bmp1.ctx = null;
+				bmp1.pixel = null;
+				_gthis.tex.realloc = $bind(_gthis,_gthis.loadTexture);
+				_gthis.tex.flags &= 268435199;
+				if(_gthis.tex.onLoaded != null) {
+					_gthis.tex.onLoaded();
+				}
+				_gthis.watch($bind(_gthis,_gthis.watchCallb));
+			});
+		}
+	}
+	,toTexture: function() {
+		if(this.tex != null) {
+			return this.tex;
+		}
+		this.getSize();
+		var width = this.inf.width;
+		var height = this.inf.height;
+		if(!hxd_res_Image.ALLOW_NPOT) {
+			var tw = 1;
+			var th = 1;
+			while(tw < width) tw <<= 1;
+			while(th < height) th <<= 1;
+			width = tw;
+			height = th;
+		}
+		this.tex = new h3d_mat_Texture(width,height,[h3d_mat_TextureFlags.NoAlloc]);
+		if(hxd_res_Image.DEFAULT_FILTER != h3d_mat_Filter.Linear) {
+			this.tex.set_filter(hxd_res_Image.DEFAULT_FILTER);
+		}
+		this.tex.setName(this.entry.get_path());
+		this.loadTexture();
+		return this.tex;
+	}
+	,toTile: function() {
+		var size = this.getSize();
+		return h2d_Tile.fromTexture(this.toTexture()).sub(0,0,size.width,size.height);
+	}
+	,__class__: hxd_res_Image
+});
+var hxd_res_Loader = function(fs) {
+	this.fs = fs;
+	this.cache = new haxe_ds_StringMap();
+};
+$hxClasses["hxd.res.Loader"] = hxd_res_Loader;
+hxd_res_Loader.__name__ = true;
+hxd_res_Loader.prototype = {
+	load: function(path) {
+		return new hxd_res_Any(this,this.fs.get(path));
+	}
+	,loadImage: function(path) {
+		var _this = this.cache;
+		var i = __map_reserved[path] != null ? _this.getReserved(path) : _this.h[path];
+		if(i == null) {
+			i = new hxd_res_Image(this.fs.get(path));
+			var _this1 = this.cache;
+			if(__map_reserved[path] != null) {
+				_this1.setReserved(path,i);
+			} else {
+				_this1.h[path] = i;
+			}
+		}
+		return i;
+	}
+	,__class__: hxd_res_Loader
+};
+var hxd_res_Filter = $hxClasses["hxd.res.Filter"] = { __ename__ : true, __constructs__ : ["Fast","Chromatic"] };
+hxd_res_Filter.Fast = ["Fast",0];
+hxd_res_Filter.Fast.toString = $estr;
+hxd_res_Filter.Fast.__enum__ = hxd_res_Filter;
+hxd_res_Filter.Chromatic = ["Chromatic",1];
+hxd_res_Filter.Chromatic.toString = $estr;
+hxd_res_Filter.Chromatic.__enum__ = hxd_res_Filter;
+hxd_res_Filter.__empty_constructs__ = [hxd_res_Filter.Fast,hxd_res_Filter.Chromatic];
+var hxd_res__$NanoJpeg_Component = function() {
+};
+$hxClasses["hxd.res._NanoJpeg.Component"] = hxd_res__$NanoJpeg_Component;
+hxd_res__$NanoJpeg_Component.__name__ = true;
+hxd_res__$NanoJpeg_Component.prototype = {
+	__class__: hxd_res__$NanoJpeg_Component
+};
+var hxd_res_NanoJpeg = function() {
+	this.comps = [new hxd_res__$NanoJpeg_Component(),new hxd_res__$NanoJpeg_Component(),new hxd_res__$NanoJpeg_Component()].slice(0);
+	this.qtab = [new Array(64),new Array(64),new Array(64),new Array(64)].slice(0);
+	this.counts = new Array(16);
+	this.block = new Array(64);
+	this.njZZ = [0,1,8,16,9,2,3,10,17,24,32,25,18,11,4,5,12,19,26,33,40,48,41,34,27,20,13,6,7,14,21,28,35,42,49,56,57,50,43,36,29,22,15,23,30,37,44,51,58,59,52,45,38,31,39,46,53,60,61,54,47,55,62,63].slice(0);
+	this.vlctab = [null,null,null,null,null,null,null,null].slice(0);
+};
+$hxClasses["hxd.res.NanoJpeg"] = hxd_res_NanoJpeg;
+hxd_res_NanoJpeg.__name__ = true;
+hxd_res_NanoJpeg.decode = function(bytes,filter,position,size) {
+	if(size == null) {
+		size = -1;
+	}
+	if(position == null) {
+		position = 0;
+	}
+	if(hxd_res_NanoJpeg.inst == null) {
+		hxd_res_NanoJpeg.inst = new hxd_res_NanoJpeg();
+	}
+	hxd_res_NanoJpeg.inst.njInit(bytes,position,size,filter);
+	return hxd_res_NanoJpeg.inst.njDecode();
+};
+hxd_res_NanoJpeg.prototype = {
+	njInit: function(bytes,pos,size,filter) {
+		this.bytes = bytes;
+		this.pos = pos;
+		this.filter = filter == null ? hxd_res_Filter.Chromatic : filter;
+		if(size < 0) {
+			size = bytes.length - pos;
+		}
+		var _g = 0;
+		while(_g < 4) {
+			var i = _g++;
+			if(this.vlctab[i] == null) {
+				this.vlctab[i] = hxd_impl_Tmp.getBytes(131072);
+			}
+		}
+		this.size = size;
+		this.qtused = 0;
+		this.qtavail = 0;
+		this.rstinterval = 0;
+		this.length = 0;
+		this.buf = 0;
+		this.bufbits = 0;
+		var _g1 = 0;
+		while(_g1 < 3) this.comps[_g1++].dcpred = 0;
+	}
+	,cleanup: function() {
+		this.bytes = null;
+		var _g = 0;
+		var _g1 = this.comps;
+		while(_g < _g1.length) {
+			var c = _g1[_g];
+			++_g;
+			if(c.pixels != null) {
+				hxd_impl_Tmp.saveBytes(c.pixels);
+				c.pixels = null;
+			}
+		}
+		var _g2 = 0;
+		while(_g2 < 8) {
+			var i = _g2++;
+			if(this.vlctab[i] != null) {
+				hxd_impl_Tmp.saveBytes(this.vlctab[i]);
+				this.vlctab[i] = null;
+			}
+		}
+	}
+	,njShowBits: function(bits) {
+		if(bits == 0) {
+			return 0;
+		}
+		while(this.bufbits < bits) {
+			if(this.size <= 0) {
+				this.buf = this.buf << 8 | 255;
+				this.bufbits += 8;
+				continue;
+			}
+			var newbyte = this.bytes.b[this.pos];
+			this.pos++;
+			this.size--;
+			this.bufbits += 8;
+			this.buf = this.buf << 8 | newbyte;
+			if(newbyte == 255) {
+				var marker = this.bytes.b[this.pos];
+				this.pos++;
+				this.size--;
+				switch(marker) {
+				case 217:
+					this.size = 0;
+					break;
+				case 0:case 255:
+					break;
+				default:
+					this.buf = this.buf << 8 | marker;
+					this.bufbits += 8;
+				}
+			}
+		}
+		return this.buf >> this.bufbits - bits & (1 << bits) - 1;
+	}
+	,njDecodeSOF: function() {
+		this.length = this.bytes.b[this.pos] << 8 | this.bytes.b[this.pos + 1];
+		this.pos += 2;
+		this.size -= 2;
+		this.length -= 2;
+		if(this.bytes.b[this.pos] != 8) {
+			this.notSupported();
+		}
+		this.height = this.bytes.b[this.pos + 1] << 8 | this.bytes.b[this.pos + 2];
+		this.width = this.bytes.b[this.pos + 3] << 8 | this.bytes.b[this.pos + 4];
+		this.ncomp = this.bytes.b[this.pos + 5];
+		this.pos += 6;
+		this.size -= 6;
+		this.length -= 6;
+		switch(this.ncomp) {
+		case 1:case 3:
+			break;
+		default:
+			this.notSupported();
+		}
+		var ssxmax = 0;
+		var ssymax = 0;
+		var _g2 = 0;
+		var _g1 = this.ncomp;
+		while(_g2 < _g1) {
+			var c = this.comps[_g2++];
+			c.cid = this.bytes.b[this.pos];
+			c.ssx = this.bytes.b[this.pos + 1] >> 4;
+			if((c.ssx & c.ssx - 1) != 0) {
+				this.notSupported();
+			}
+			c.ssy = this.bytes.b[this.pos + 1] & 15;
+			if((c.ssy & c.ssy - 1) != 0) {
+				this.notSupported();
+			}
+			c.qtsel = this.bytes.b[this.pos + 2];
+			this.pos += 3;
+			this.size -= 3;
+			this.length -= 3;
+			this.qtused |= 1 << c.qtsel;
+			if(c.ssx > ssxmax) {
+				ssxmax = c.ssx;
+			}
+			if(c.ssy > ssymax) {
+				ssymax = c.ssy;
+			}
+		}
+		if(this.ncomp == 1) {
+			var c1 = this.comps[0];
+			ssymax = 1;
+			ssxmax = 1;
+			c1.ssx = c1.ssy = 1;
+		}
+		this.mbsizex = ssxmax << 3;
+		this.mbsizey = ssymax << 3;
+		this.mbwidth = (this.width + this.mbsizex - 1) / this.mbsizex | 0;
+		this.mbheight = (this.height + this.mbsizey - 1) / this.mbsizey | 0;
+		var _g21 = 0;
+		var _g11 = this.ncomp;
+		while(_g21 < _g11) {
+			var c2 = this.comps[_g21++];
+			c2.width = (this.width * c2.ssx + ssxmax - 1) / ssxmax | 0;
+			c2.stride = c2.width + 7 & 2147483640;
+			c2.height = (this.height * c2.ssy + ssymax - 1) / ssymax | 0;
+			c2.stride = this.mbwidth * this.mbsizex * c2.ssx / ssxmax | 0;
+			if(c2.width < 3 && c2.ssx != ssxmax || c2.height < 3 && c2.ssy != ssymax) {
+				this.notSupported();
+			}
+			c2.pixels = hxd_impl_Tmp.getBytes(c2.stride * (this.mbheight * this.mbsizey * c2.ssy / ssymax | 0));
+		}
+		var count = this.length;
+		this.pos += count;
+		this.size -= count;
+		this.length -= count;
+	}
+	,njDecodeDQT: function() {
+		this.length = this.bytes.b[this.pos] << 8 | this.bytes.b[this.pos + 1];
+		this.pos += 2;
+		this.size -= 2;
+		this.length -= 2;
+		while(this.length >= 65) {
+			var i = this.bytes.b[this.pos];
+			this.qtavail |= 1 << i;
+			var t = this.qtab[i];
+			var _g = 0;
+			while(_g < 64) {
+				var k = _g++;
+				t[k] = this.bytes.b[this.pos + (k + 1)];
+			}
+			this.pos += 65;
+			this.size -= 65;
+			this.length -= 65;
+		}
+	}
+	,njDecodeDHT: function() {
+		this.length = this.bytes.b[this.pos] << 8 | this.bytes.b[this.pos + 1];
+		this.pos += 2;
+		this.size -= 2;
+		this.length -= 2;
+		while(this.length >= 17) {
+			var i = this.bytes.b[this.pos];
+			i = i >> 4 & 1 | (i & 3) << 1;
+			var _g = 0;
+			while(_g < 16) {
+				var codelen = _g++;
+				this.counts[codelen] = this.bytes.b[this.pos + (codelen + 1)];
+			}
+			this.pos += 17;
+			this.size -= 17;
+			this.length -= 17;
+			var vlc = this.vlctab[i];
+			var vpos = 0;
+			var remain = 65536;
+			var spread = 65536;
+			var _g1 = 1;
+			while(_g1 < 17) {
+				var codelen1 = _g1++;
+				spread >>= 1;
+				var currcnt = this.counts[codelen1 - 1];
+				if(currcnt == 0) {
+					continue;
+				}
+				remain -= currcnt << 16 - codelen1;
+				var _g2 = 0;
+				while(_g2 < currcnt) {
+					var code = this.bytes.b[this.pos + _g2++];
+					var _g4 = 0;
+					var _g3 = spread;
+					while(_g4 < _g3) {
+						++_g4;
+						vlc.b[vpos++] = codelen1 & 255;
+						vlc.b[vpos++] = code & 255;
+					}
+				}
+				this.pos += currcnt;
+				this.size -= currcnt;
+				this.length -= currcnt;
+			}
+			while(remain-- != 0) {
+				vlc.b[vpos] = 0;
+				vpos += 2;
+			}
+		}
+	}
+	,njDecodeDRI: function() {
+		this.length = this.bytes.b[this.pos] << 8 | this.bytes.b[this.pos + 1];
+		this.pos += 2;
+		this.size -= 2;
+		this.length -= 2;
+		this.rstinterval = this.bytes.b[this.pos] << 8 | this.bytes.b[this.pos + 1];
+		var count = this.length;
+		this.pos += count;
+		this.size -= count;
+		this.length -= count;
+	}
+	,njDecodeBlock: function(c,po) {
+		var out = c.pixels;
+		var value;
+		var coef = 0;
+		var _g = 0;
+		while(_g < 64) this.block[_g++] = 0;
+		var c1 = c.dcpred;
+		var vlc = this.vlctab[c.dctabsel];
+		var value1 = this.njShowBits(16);
+		var bits = vlc.b[value1 << 1];
+		if(this.bufbits < bits) {
+			this.njShowBits(bits);
+		}
+		this.bufbits -= bits;
+		value1 = vlc.b[value1 << 1 | 1];
+		this.vlcCode = value1;
+		bits = value1 & 15;
+		var tmp;
+		if(bits == 0) {
+			tmp = 0;
+		} else {
+			var r = this.njShowBits(bits);
+			this.bufbits -= bits;
+			value1 = r;
+			if(r < 1 << bits - 1) {
+				value1 = r + ((-1 << bits) + 1);
+			}
+			tmp = value1;
+		}
+		c.dcpred = c1 + tmp;
+		var qt = this.qtab[c.qtsel];
+		var at = this.vlctab[c.actabsel];
+		this.block[0] = c.dcpred * qt[0];
+		while(true) {
+			var value2 = this.njShowBits(16);
+			var bits1 = at.b[value2 << 1];
+			if(this.bufbits < bits1) {
+				this.njShowBits(bits1);
+			}
+			this.bufbits -= bits1;
+			value2 = at.b[value2 << 1 | 1];
+			this.vlcCode = value2;
+			bits1 = value2 & 15;
+			if(bits1 == 0) {
+				value = 0;
+			} else {
+				var r1 = this.njShowBits(bits1);
+				this.bufbits -= bits1;
+				value2 = r1;
+				if(r1 < 1 << bits1 - 1) {
+					value2 = r1 + ((-1 << bits1) + 1);
+				}
+				value = value2;
+			}
+			if(this.vlcCode == 0) {
+				break;
+			}
+			coef += (this.vlcCode >> 4) + 1;
+			this.block[this.njZZ[coef]] = value * qt[coef];
+			if(!(coef < 63)) {
+				break;
+			}
+		}
+		var _g1 = 0;
+		while(_g1 < 8) {
+			var bp = _g1++ * 8;
+			var x0;
+			var x1;
+			var x2;
+			var x3;
+			var x4;
+			var x5;
+			var x6;
+			var x7;
+			var x8;
+			x1 = this.block[bp + 4] << 11;
+			x2 = this.block[bp + 6];
+			x3 = this.block[bp + 2];
+			x4 = this.block[bp + 1];
+			x5 = this.block[bp + 7];
+			x6 = this.block[bp + 5];
+			x7 = this.block[bp + 3];
+			if((x1 | x2 | x3 | x4 | x5 | x6 | x7) == 0) {
+				var val = this.block[bp + 7] = this.block[bp] << 3;
+				var val1 = this.block[bp + 6] = val;
+				var val2 = this.block[bp + 5] = val1;
+				var val3 = this.block[bp + 4] = val2;
+				var val4 = this.block[bp + 3] = val3;
+				var val5 = this.block[bp + 2] = val4;
+				var val6 = this.block[bp + 1] = val5;
+				this.block[bp] = val6;
+			} else {
+				x0 = (this.block[bp] << 11) + 128;
+				x8 = 565 * (x4 + x5);
+				x4 = x8 + 2276 * x4;
+				x5 = x8 - 3406 * x5;
+				x8 = 2408 * (x6 + x7);
+				x6 = x8 - 799 * x6;
+				x7 = x8 - 4017 * x7;
+				x8 = x0 + x1;
+				x0 -= x1;
+				x1 = 1108 * (x3 + x2);
+				x2 = x1 - 3784 * x2;
+				x3 = x1 + 1568 * x3;
+				x1 = x4 + x6;
+				x4 -= x6;
+				x6 = x5 + x7;
+				x5 -= x7;
+				x7 = x8 + x3;
+				x8 -= x3;
+				x3 = x0 + x2;
+				x0 -= x2;
+				x2 = 181 * (x4 + x5) + 128 >> 8;
+				x4 = 181 * (x4 - x5) + 128 >> 8;
+				this.block[bp] = x7 + x1 >> 8;
+				this.block[bp + 1] = x3 + x2 >> 8;
+				this.block[bp + 2] = x0 + x4 >> 8;
+				this.block[bp + 3] = x8 + x6 >> 8;
+				this.block[bp + 4] = x8 - x6 >> 8;
+				this.block[bp + 5] = x0 - x4 >> 8;
+				this.block[bp + 6] = x3 - x2 >> 8;
+				this.block[bp + 7] = x7 - x1 >> 8;
+			}
+		}
+		var _g2 = 0;
+		while(_g2 < 8) {
+			var coef1 = _g2++;
+			var po1 = coef1 + po;
+			var stride = c.stride;
+			var x01;
+			var x11;
+			var x21;
+			var x31;
+			var x41;
+			var x51;
+			var x61;
+			var x71;
+			var x81;
+			x11 = this.block[coef1 + 32] << 8;
+			x21 = this.block[coef1 + 48];
+			x31 = this.block[coef1 + 16];
+			x41 = this.block[coef1 + 8];
+			x51 = this.block[coef1 + 56];
+			x61 = this.block[coef1 + 40];
+			x71 = this.block[coef1 + 24];
+			if((x11 | x21 | x31 | x41 | x51 | x61 | x71) == 0) {
+				var x = (this.block[coef1] + 32 >> 6) + 128;
+				if(x < 0) {
+					x11 = 0;
+				} else if(x > 255) {
+					x11 = 255;
+				} else {
+					x11 = x;
+				}
+				var _g3 = 0;
+				while(_g3 < 8) {
+					++_g3;
+					out.b[po1] = x11 & 255;
+					po1 += stride;
+				}
+			} else {
+				x01 = (this.block[coef1] << 8) + 8192;
+				x81 = 565 * (x41 + x51) + 4;
+				x41 = x81 + 2276 * x41 >> 3;
+				x51 = x81 - 3406 * x51 >> 3;
+				x81 = 2408 * (x61 + x71) + 4;
+				x61 = x81 - 799 * x61 >> 3;
+				x71 = x81 - 4017 * x71 >> 3;
+				x81 = x01 + x11;
+				x01 -= x11;
+				x11 = 1108 * (x31 + x21) + 4;
+				x21 = x11 - 3784 * x21 >> 3;
+				x31 = x11 + 1568 * x31 >> 3;
+				x11 = x41 + x61;
+				x41 -= x61;
+				x61 = x51 + x71;
+				x51 -= x71;
+				x71 = x81 + x31;
+				x81 -= x31;
+				x31 = x01 + x21;
+				x01 -= x21;
+				x21 = 181 * (x41 + x51) + 128 >> 8;
+				x41 = 181 * (x41 - x51) + 128 >> 8;
+				var x9 = (x71 + x11 >> 14) + 128;
+				out.b[po1] = (x9 < 0 ? 0 : x9 > 255 ? 255 : x9) & 255;
+				po1 += stride;
+				var x10 = (x31 + x21 >> 14) + 128;
+				out.b[po1] = (x10 < 0 ? 0 : x10 > 255 ? 255 : x10) & 255;
+				po1 += stride;
+				var x12 = (x01 + x41 >> 14) + 128;
+				out.b[po1] = (x12 < 0 ? 0 : x12 > 255 ? 255 : x12) & 255;
+				po1 += stride;
+				var x13 = (x81 + x61 >> 14) + 128;
+				out.b[po1] = (x13 < 0 ? 0 : x13 > 255 ? 255 : x13) & 255;
+				po1 += stride;
+				var x14 = (x81 - x61 >> 14) + 128;
+				out.b[po1] = (x14 < 0 ? 0 : x14 > 255 ? 255 : x14) & 255;
+				po1 += stride;
+				var x15 = (x01 - x41 >> 14) + 128;
+				out.b[po1] = (x15 < 0 ? 0 : x15 > 255 ? 255 : x15) & 255;
+				po1 += stride;
+				var x16 = (x31 - x21 >> 14) + 128;
+				out.b[po1] = (x16 < 0 ? 0 : x16 > 255 ? 255 : x16) & 255;
+				po1 += stride;
+				var x17 = (x71 - x11 >> 14) + 128;
+				out.b[po1] = (x17 < 0 ? 0 : x17 > 255 ? 255 : x17) & 255;
+			}
+		}
+	}
+	,notSupported: function() {
+		throw new js__$Boot_HaxeError("This JPG file is not supported");
+	}
+	,njDecodeScan: function() {
+		this.length = this.bytes.b[this.pos] << 8 | this.bytes.b[this.pos + 1];
+		this.pos += 2;
+		this.size -= 2;
+		this.length -= 2;
+		if(this.bytes.b[this.pos] != this.ncomp) {
+			this.notSupported();
+		}
+		this.pos += 1;
+		this.size -= 1;
+		this.length -= 1;
+		var _g1 = 0;
+		var _g = this.ncomp;
+		while(_g1 < _g) {
+			var c = this.comps[_g1++];
+			c.dctabsel = this.bytes.b[this.pos + 1] >> 4 << 1;
+			c.actabsel = (this.bytes.b[this.pos + 1] & 3) << 1 | 1;
+			this.pos += 2;
+			this.size -= 2;
+			this.length -= 2;
+		}
+		var start = this.bytes.b[this.pos];
+		if(!this.progressive && start != 0 || this.bytes.b[this.pos + 1] != 63 - start || this.bytes.b[this.pos + 2] != 0) {
+			this.notSupported();
+		}
+		var count = this.length;
+		this.pos += count;
+		this.size -= count;
+		this.length -= count;
+		if(this.progressive) {
+			throw new js__$Boot_HaxeError("Unsupported progressive JPG");
+		}
+		var mbx = 0;
+		var mby = 0;
+		var rstcount = this.rstinterval;
+		while(true) {
+			var _g11 = 0;
+			var _g2 = this.ncomp;
+			while(_g11 < _g2) {
+				var c1 = this.comps[_g11++];
+				var _g3 = 0;
+				var _g21 = c1.ssy;
+				while(_g3 < _g21) {
+					var sby = _g3++;
+					var _g5 = 0;
+					var _g4 = c1.ssx;
+					while(_g5 < _g4) this.njDecodeBlock(c1,(mby * c1.ssy + sby) * c1.stride + mbx * c1.ssx + _g5++ << 3);
+				}
+			}
+			if(++mbx >= this.mbwidth) {
+				mbx = 0;
+				if(++mby >= this.mbheight) {
+					break;
+				}
+			}
+			if(this.rstinterval != 0 && --rstcount == 0) {
+				this.bufbits &= 248;
+				this.njShowBits(16);
+				this.bufbits -= 16;
+				rstcount = this.rstinterval;
+				var _g6 = 0;
+				while(_g6 < 3) this.comps[_g6++].dcpred = 0;
+			}
+		}
+	}
+	,njUpsampleH: function(c) {
+		var xmax = c.width - 3;
+		var cout = hxd_impl_Tmp.getBytes(c.width * c.height << 1);
+		var lout = cout;
+		var lin = c.pixels;
+		var pi = 0;
+		var po = 0;
+		var _g1 = 0;
+		var _g = c.height;
+		while(_g1 < _g) {
+			++_g1;
+			var x = 139 * lin.b[pi] + -11 * lin.b[pi + 1] + 64 >> 7;
+			lout.b[po] = (x < 0 ? 0 : x > 255 ? 255 : x) & 255;
+			var x1 = 104 * lin.b[pi] + 27 * lin.b[pi + 1] + -3 * lin.b[pi + 2] + 64 >> 7;
+			lout.b[po + 1] = (x1 < 0 ? 0 : x1 > 255 ? 255 : x1) & 255;
+			var x2 = 28 * lin.b[pi] + 109 * lin.b[pi + 1] + -9 * lin.b[pi + 2] + 64 >> 7;
+			lout.b[po + 2] = (x2 < 0 ? 0 : x2 > 255 ? 255 : x2) & 255;
+			var _g3 = 0;
+			while(_g3 < xmax) {
+				var x3 = _g3++;
+				var x4 = -9 * lin.b[pi + x3] + 111 * lin.b[pi + x3 + 1] + 29 * lin.b[pi + x3 + 2] + -3 * lin.b[pi + x3 + 3] + 64 >> 7;
+				lout.b[po + (x3 << 1) + 3] = (x4 < 0 ? 0 : x4 > 255 ? 255 : x4) & 255;
+				var x5 = -3 * lin.b[pi + x3] + 29 * lin.b[pi + x3 + 1] + 111 * lin.b[pi + x3 + 2] + -9 * lin.b[pi + x3 + 3] + 64 >> 7;
+				lout.b[po + (x3 << 1) + 4] = (x5 < 0 ? 0 : x5 > 255 ? 255 : x5) & 255;
+			}
+			pi += c.stride;
+			po += c.width << 1;
+			var x6 = 28 * lin.b[pi - 1] + 109 * lin.b[pi - 2] + -9 * lin.b[pi - 3] + 64 >> 7;
+			lout.b[po - 3] = (x6 < 0 ? 0 : x6 > 255 ? 255 : x6) & 255;
+			var x7 = 104 * lin.b[pi - 1] + 27 * lin.b[pi - 2] + -3 * lin.b[pi - 3] + 64 >> 7;
+			lout.b[po - 2] = (x7 < 0 ? 0 : x7 > 255 ? 255 : x7) & 255;
+			var x8 = 139 * lin.b[pi - 1] + -11 * lin.b[pi - 2] + 64 >> 7;
+			lout.b[po - 1] = (x8 < 0 ? 0 : x8 > 255 ? 255 : x8) & 255;
+		}
+		c.width <<= 1;
+		c.stride = c.width;
+		hxd_impl_Tmp.saveBytes(c.pixels);
+		c.pixels = cout;
+	}
+	,njUpsampleV: function(c) {
+		var w = c.width;
+		var s1 = c.stride;
+		var s2 = s1 + s1;
+		var out = hxd_impl_Tmp.getBytes(c.width * c.height << 1);
+		var pi = 0;
+		var po = 0;
+		var cout = out;
+		var cin = c.pixels;
+		var _g1 = 0;
+		while(_g1 < w) {
+			var x = _g1++;
+			po = x;
+			pi = x;
+			var x1 = 139 * cin.b[pi] + -11 * cin.b[pi + s1] + 64 >> 7;
+			cout.b[x] = (x1 < 0 ? 0 : x1 > 255 ? 255 : x1) & 255;
+			po = x + w;
+			var x2 = 104 * cin.b[pi] + 27 * cin.b[pi + s1] + -3 * cin.b[pi + s2] + 64 >> 7;
+			cout.b[po] = (x2 < 0 ? 0 : x2 > 255 ? 255 : x2) & 255;
+			po += w;
+			var x3 = 28 * cin.b[pi] + 109 * cin.b[pi + s1] + -9 * cin.b[pi + s2] + 64 >> 7;
+			cout.b[po] = (x3 < 0 ? 0 : x3 > 255 ? 255 : x3) & 255;
+			po += w;
+			pi += s1;
+			var _g3 = 0;
+			var _g2 = c.height - 2;
+			while(_g3 < _g2) {
+				++_g3;
+				var x4 = -9 * cin.b[pi - s1] + 111 * cin.b[pi] + 29 * cin.b[pi + s1] + -3 * cin.b[pi + s2] + 64 >> 7;
+				cout.b[po] = (x4 < 0 ? 0 : x4 > 255 ? 255 : x4) & 255;
+				po += w;
+				var x5 = -3 * cin.b[pi - s1] + 29 * cin.b[pi] + 111 * cin.b[pi + s1] + -9 * cin.b[pi + s2] + 64 >> 7;
+				cout.b[po] = (x5 < 0 ? 0 : x5 > 255 ? 255 : x5) & 255;
+				po += w;
+				pi += s1;
+			}
+			pi += s1;
+			var x6 = 28 * cin.b[pi] + 109 * cin.b[pi - s1] + -9 * cin.b[pi - s2] + 64 >> 7;
+			cout.b[po] = (x6 < 0 ? 0 : x6 > 255 ? 255 : x6) & 255;
+			po += w;
+			var x7 = 104 * cin.b[pi] + 27 * cin.b[pi - s1] + -3 * cin.b[pi - s2] + 64 >> 7;
+			cout.b[po] = (x7 < 0 ? 0 : x7 > 255 ? 255 : x7) & 255;
+			po += w;
+			var x8 = 139 * cin.b[pi] + -11 * cin.b[pi - s1] + 64 >> 7;
+			cout.b[po] = (x8 < 0 ? 0 : x8 > 255 ? 255 : x8) & 255;
+		}
+		c.height <<= 1;
+		c.stride = c.width;
+		hxd_impl_Tmp.saveBytes(c.pixels);
+		c.pixels = out;
+	}
+	,njUpsample: function(c) {
+		var xshift = 0;
+		var yshift = 0;
+		while(c.width < this.width) {
+			c.width <<= 1;
+			++xshift;
+		}
+		while(c.height < this.height) {
+			c.height <<= 1;
+			++yshift;
+		}
+		var out = hxd_impl_Tmp.getBytes(c.width * c.height);
+		var lin = c.pixels;
+		var pout = 0;
+		var lout = out;
+		var _g1 = 0;
+		var _g = c.height;
+		while(_g1 < _g) {
+			var pin = (_g1++ >> yshift) * c.stride;
+			var _g3 = 0;
+			var _g2 = c.width;
+			while(_g3 < _g2) lout.b[pout++] = lin.b[(_g3++ >> xshift) + pin] & 255;
+		}
+		c.stride = c.width;
+		hxd_impl_Tmp.saveBytes(c.pixels);
+		c.pixels = out;
+	}
+	,njConvert: function() {
+		var _g1 = 0;
+		var _g = this.ncomp;
+		while(_g1 < _g) {
+			var c = this.comps[_g1++];
+			switch(this.filter[1]) {
+			case 0:
+				if(c.width < this.width || c.height < this.height) {
+					this.njUpsample(c);
+				}
+				break;
+			case 1:
+				while(c.width < this.width || c.height < this.height) {
+					if(c.width < this.width) {
+						this.njUpsampleH(c);
+					}
+					if(c.height < this.height) {
+						this.njUpsampleV(c);
+					}
+				}
+				break;
+			}
+			if(c.width < this.width || c.height < this.height) {
+				throw new js__$Boot_HaxeError("assert");
+			}
+		}
+		var pixels = hxd_impl_Tmp.getBytes(this.width * this.height * 4);
+		if(this.ncomp == 3) {
+			var py = this.comps[0].pixels;
+			var pcb = this.comps[1].pixels;
+			var pcr = this.comps[2].pixels;
+			var pix = pixels;
+			var k1 = 0;
+			var k2 = 0;
+			var k3 = 0;
+			var out = 0;
+			var _g11 = 0;
+			var _g2 = this.height;
+			while(_g11 < _g2) {
+				++_g11;
+				var _g3 = 0;
+				var _g21 = this.width;
+				while(_g3 < _g21) {
+					++_g3;
+					var y = py.b[k1++] << 8;
+					var cb = pcb.b[k2++] - 128;
+					var cr = pcr.b[k3++] - 128;
+					var x = y + 359 * cr + 128 >> 8;
+					var x1 = y - 88 * cb - 183 * cr + 128 >> 8;
+					var x2 = y + 454 * cb + 128 >> 8;
+					pix.b[out++] = (x2 < 0 ? 0 : x2 > 255 ? 255 : x2) & 255;
+					pix.b[out++] = (x1 < 0 ? 0 : x1 > 255 ? 255 : x1) & 255;
+					pix.b[out++] = (x < 0 ? 0 : x > 255 ? 255 : x) & 255;
+					pix.b[out++] = 255;
+				}
+				k1 += this.comps[0].stride - this.width;
+				k2 += this.comps[1].stride - this.width;
+				k3 += this.comps[2].stride - this.width;
+			}
+		} else {
+			throw new js__$Boot_HaxeError("TODO");
+		}
+		return pixels;
+	}
+	,njDecode: function() {
+		if(this.size < 2 || this.bytes.b[this.pos] != 255 || this.bytes.b[this.pos + 1] != 216) {
+			throw new js__$Boot_HaxeError("This file is not a JPEG");
+		}
+		this.pos += 2;
+		this.size -= 2;
+		this.length -= 2;
+		try {
+			while(true) {
+				this.pos += 2;
+				this.size -= 2;
+				this.length -= 2;
+				switch(this.bytes.b[this.pos + -1]) {
+				case 192:
+					this.njDecodeSOF();
+					break;
+				case 194:
+					this.progressive = true;
+					var _g = 4;
+					while(_g < 8) {
+						var i = _g++;
+						if(this.vlctab[i] == null) {
+							this.vlctab[i] = hxd_impl_Tmp.getBytes(131072);
+						}
+					}
+					this.njDecodeSOF();
+					break;
+				case 195:
+					throw new js__$Boot_HaxeError("Unsupported lossless JPG");
+					break;
+				case 196:
+					this.njDecodeDHT();
+					break;
+				case 218:
+					this.njDecodeScan();
+					throw "__break__";
+					break;
+				case 219:
+					this.njDecodeDQT();
+					break;
+				case 221:
+					this.njDecodeDRI();
+					break;
+				case 254:
+					this.length = this.bytes.b[this.pos] << 8 | this.bytes.b[this.pos + 1];
+					this.pos += 2;
+					this.size -= 2;
+					this.length -= 2;
+					var count = this.length;
+					this.pos += count;
+					this.size -= count;
+					this.length -= count;
+					break;
+				default:
+					switch(this.bytes.b[this.pos + -1] & 240) {
+					case 192:
+						throw new js__$Boot_HaxeError("Unsupported jpeg type " + (this.bytes.b[this.pos + -1] & 15));
+						break;
+					case 224:
+						this.length = this.bytes.b[this.pos] << 8 | this.bytes.b[this.pos + 1];
+						this.pos += 2;
+						this.size -= 2;
+						this.length -= 2;
+						var count1 = this.length;
+						this.pos += count1;
+						this.size -= count1;
+						this.length -= count1;
+						break;
+					default:
+						throw new js__$Boot_HaxeError("Unsupported jpeg tag 0x" + StringTools.hex(this.bytes.b[this.pos + -1],2));
+					}
+				}
+			}
+		} catch( e ) { if( e != "__break__" ) throw e; }
+		var pixels = this.njConvert();
+		this.cleanup();
+		return { pixels : pixels, width : this.width, height : this.height};
+	}
+	,__class__: hxd_res_NanoJpeg
 };
 var hxsl_Type = $hxClasses["hxsl.Type"] = { __ename__ : true, __constructs__ : ["TVoid","TInt","TBool","TFloat","TString","TVec","TMat3","TMat4","TMat3x4","TBytes","TSampler2D","TSamplerCube","TStruct","TFun","TArray"] };
 hxsl_Type.TVoid = ["TVoid",0];
@@ -20074,6 +23940,125 @@ js_html_compat_ArrayBuffer.prototype = {
 	}
 	,__class__: js_html_compat_ArrayBuffer
 };
+var js_html_compat_DataView = function(buffer,byteOffset,byteLength) {
+	this.buf = buffer;
+	this.offset = byteOffset == null ? 0 : byteOffset;
+	this.length = byteLength == null ? buffer.byteLength - this.offset : byteLength;
+	if(this.offset < 0 || this.length < 0 || this.offset + this.length > buffer.byteLength) {
+		throw new js__$Boot_HaxeError(haxe_io_Error.OutsideBounds);
+	}
+	this.byteLength = this.length;
+	this.byteOffset = this.offset;
+	this.buffer = this.buf;
+};
+$hxClasses["js.html.compat.DataView"] = js_html_compat_DataView;
+js_html_compat_DataView.__name__ = true;
+js_html_compat_DataView.prototype = {
+	getInt8: function(byteOffset) {
+		var v = this.buf.a[this.offset + byteOffset];
+		if(v >= 128) {
+			return v - 256;
+		} else {
+			return v;
+		}
+	}
+	,getUint8: function(byteOffset) {
+		return this.buf.a[this.offset + byteOffset];
+	}
+	,getInt16: function(byteOffset,littleEndian) {
+		var v = this.getUint16(byteOffset,littleEndian);
+		if(v >= 32768) {
+			return v - 65536;
+		} else {
+			return v;
+		}
+	}
+	,getUint16: function(byteOffset,littleEndian) {
+		if(littleEndian) {
+			return this.buf.a[this.offset + byteOffset] | this.buf.a[this.offset + byteOffset + 1] << 8;
+		} else {
+			return this.buf.a[this.offset + byteOffset] << 8 | this.buf.a[this.offset + byteOffset + 1];
+		}
+	}
+	,getInt32: function(byteOffset,littleEndian) {
+		var p = this.offset + byteOffset;
+		var a = this.buf.a[p++];
+		var b = this.buf.a[p++];
+		var c = this.buf.a[p++];
+		var d = this.buf.a[p++];
+		if(littleEndian) {
+			return a | b << 8 | c << 16 | d << 24;
+		} else {
+			return d | c << 8 | b << 16 | a << 24;
+		}
+	}
+	,getUint32: function(byteOffset,littleEndian) {
+		var v = this.getInt32(byteOffset,littleEndian);
+		if(v < 0) {
+			return v + 4294967296.;
+		} else {
+			return v;
+		}
+	}
+	,getFloat32: function(byteOffset,littleEndian) {
+		return haxe_io_FPHelper.i32ToFloat(this.getInt32(byteOffset,littleEndian));
+	}
+	,getFloat64: function(byteOffset,littleEndian) {
+		var a = this.getInt32(byteOffset,littleEndian);
+		var b = this.getInt32(byteOffset + 4,littleEndian);
+		return haxe_io_FPHelper.i64ToDouble(littleEndian ? a : b,littleEndian ? b : a);
+	}
+	,setInt8: function(byteOffset,value) {
+		this.buf.a[byteOffset + this.offset] = value < 0 ? value + 128 & 255 : value & 255;
+	}
+	,setUint8: function(byteOffset,value) {
+		this.buf.a[byteOffset + this.offset] = value & 255;
+	}
+	,setInt16: function(byteOffset,value,littleEndian) {
+		this.setUint16(byteOffset,value < 0 ? value + 65536 : value,littleEndian);
+	}
+	,setUint16: function(byteOffset,value,littleEndian) {
+		var p = byteOffset + this.offset;
+		if(littleEndian) {
+			this.buf.a[p] = value & 255;
+			this.buf.a[p++] = value >> 8 & 255;
+		} else {
+			this.buf.a[p++] = value >> 8 & 255;
+			this.buf.a[p] = value & 255;
+		}
+	}
+	,setInt32: function(byteOffset,value,littleEndian) {
+		this.setUint32(byteOffset,value,littleEndian);
+	}
+	,setUint32: function(byteOffset,value,littleEndian) {
+		var p = byteOffset + this.offset;
+		if(littleEndian) {
+			this.buf.a[p++] = value & 255;
+			this.buf.a[p++] = value >> 8 & 255;
+			this.buf.a[p++] = value >> 16 & 255;
+			this.buf.a[p++] = value >>> 24;
+		} else {
+			this.buf.a[p++] = value >>> 24;
+			this.buf.a[p++] = value >> 16 & 255;
+			this.buf.a[p++] = value >> 8 & 255;
+			this.buf.a[p++] = value & 255;
+		}
+	}
+	,setFloat32: function(byteOffset,value,littleEndian) {
+		this.setUint32(byteOffset,haxe_io_FPHelper.floatToI32(value),littleEndian);
+	}
+	,setFloat64: function(byteOffset,value,littleEndian) {
+		var i64 = haxe_io_FPHelper.doubleToI64(value);
+		if(littleEndian) {
+			this.setUint32(byteOffset,i64.low);
+			this.setUint32(byteOffset,i64.high);
+		} else {
+			this.setUint32(byteOffset,i64.high);
+			this.setUint32(byteOffset,i64.low);
+		}
+	}
+	,__class__: js_html_compat_DataView
+};
 var js_html_compat_Float32Array = function() { };
 $hxClasses["js.html.compat.Float32Array"] = js_html_compat_Float32Array;
 js_html_compat_Float32Array.__name__ = true;
@@ -20247,6 +24232,15 @@ js_html_compat_Uint8Array._subarray = function(start,end) {
 	a.byteOffset = start;
 	return a;
 };
+var protean_display_Image = function(path) {
+	display_PImage.call(this,path);
+};
+$hxClasses["protean.display.Image"] = protean_display_Image;
+protean_display_Image.__name__ = true;
+protean_display_Image.__super__ = display_PImage;
+protean_display_Image.prototype = $extend(display_PImage.prototype,{
+	__class__: protean_display_Image
+});
 var protean_display_Shape = function() {
 	display_PShape.call(this);
 };
@@ -20274,14 +24268,17 @@ var Bool = $hxClasses["Bool"] = Boolean;
 Bool.__ename__ = ["Bool"];
 var Class = $hxClasses["Class"] = { __name__ : ["Class"]};
 var Enum = { };
+haxe_Resource.content = [{ name : "R_test_png", data : "iVBORw0KGgoAAAANSUhEUgAAAGQAAABkCAYAAABw4pVUAAANSElEQVR4nOydC3AV1fnAv7N7b3gkIfw1CCiKmNyA+aNWrdI8UEap9YEmBBytHTudjtPntFVH7bSd1mk7fepYbWestvYxdWq1QEhU1FpxUPIQ8YkaIQ8tKgUUVB4Cyb13v37f3k0IZM/Zs3v3PpLc33DmLtnz+r5vz9nz3ggiQoH8wch1BgocScEgeUbBIHlGwSB5RsEgeUbBIHnGmDBIrKVdsMt1PsJAjIZ+SEVzxywhsJ4enwWGJXagwC76cwm5KeRKnWtmP7l95PbytUBRbRk4AyzYgCja+ppq38uNBPrkpUHmPfJshWWZSwDhQsrdp+hPJ8Dh0szGaNaMqolctXNtkdtGxegVELDWMJKPbr78vL5wc54+eWOQ+Q9sKB6YHP8GCnEdGaJK4ZWf/t9qRvttSJUidwR0kwLuKzoQvfv1axZ84iO7GSPnBqlY9Wy1YUZ+DIAXw+GqRwk95XdhqmpS+SklP9/RzAZVdeIJK5m4tW/ZeV2aYTJCzgwyt6XzfAusn9BlHTnTZ/CV5DZ7+JlHbrnPeJPk2g0wfrSlseYZn2FDIesGqV7ZOTNuWn+lR/iiwJEgPEfhn/Lws5j8fCaNNJ6MJo0vdS2v2R44jgBkzSDULDWpGrmZUvsBaFZNMiieXorn75CqtgZbVcxgq6uU/HyB/FSmlWluqQH8jOK5raexLplmXFpkxSAVrZ1VBloPQarF5BduHb1L7kV6ajvIGu10vYncQVKSa+adPskkcqdTmDoKU0vXZ5M7EYL1vV6xhHFVX0NNd4Cwvsi4QSpb226k/sBP6XKyj2ADpMT1AuHBhCVa32qq/SCMvJzS3DEtYmADCriaDLWQ/lTkI/gB6v/8sLeh/o4w8iIjYwahR5R7z/+g2K/yEYwV/2crUXR73/JzdmUkYw4VKzeWG5GBm+jyy+Sm6YYjuR6ikvl55LdMBsiIQcpWrYlON6c+TjFfqBmkm57aOz+ae9K9u+edaIWeIQXHbn7X+L8t73yVSuP19F9V/2cIMsrancmPL9mz7LJ42PkJ3SDzml8oSxj9a0WqzvZiPyD+AoT4VbZemjK40UF5+S7l5Xug0eggrb0YsSZcuLnp03vCzEeoBpn98IZji6x4G0U7zztlWGti5NrNjQuy2qz0Yl7LhplJkbifh228fePmASNav/WKBbvDSj80g8Qe2zBVDCSep9hiHl73CsCbuxvr/xBKwhmiqqXtKwjiNlANvYBdffVgUeTcnksXfBxGuqEMv4sVK0wYSDzjZQzK/NvUOz87343BcB45r5xnlT9bZpLd1kEIhGKQyujM3wO3+dW81m9EzulrXNgbRprZgPPKeabL1zy8nu7oIG3SNkhla/vV9Oxfp/aF7dFEyblh1rXZgvPMeWcZ1D7FdSldpEda75DYqrZKMMVLkBqucAfxqd7E9ovxyitz2opKF66SKiMzn6BW2GKFt32QxLN6ltUHrgUCG2RW2+uRSbv2vAqHJ4DcWLf/hPLF28+ZO6qNMcjMjVvMkm27eFBzkcJb18HysjPeq5+fCJJG4Cpr8q69d4LaGFujh8yGsWIMhmVhmehyq8JbtaObQAQqIVWPds7BhNUD8nmMQwYYdVsaa14KmrF8Zm5L51nUAuN3ykSJl6SIGLHuJTXKFpobgUoIJq3fgGJSSSDcNFaNwbBsLKPCi+noyDe+S0jVI51VlNgbdBmReGntaaxrDJKZTFCx6tmYaUaKZfd74tteC9rgiLW0t9BPg+R2QpjG/3df7m/IXqZUKWjZlpeFex8i/V/0E98pD68/3bSMjdTDsobKK2JqjZWg5xCHRlVxmON7FtgPk+CBV3vwVYCw+IoC/7J7aR33ssGImKvpoTvJjv9oBJScHJ1WTlfBetksa2ICV93Hud11dHWZnyh9VVlVj3ScRoJ9TuoB8a6eJRfs9RNnxDINwYOMgupjdByICbazr+2JJnY8n8JPeontEHlIgxyW0e9U8j+VbHEMxXOMNXzqFiEK3CwXUDbC8bxLGtiyksxSD6QrW2c+8GUQtPB2kL07EHYcnDb1137iyxTCezwtNGyZSXbJbdPRmTbaBjl19Xou9hfI7lOFcUfQtncGOCFbCbHMLLvUA+nM1p0m2gaJC+NrIH937Ni5tSqjU5s+KZ6/osvP9GxaOLLLSknE0Z0W2gYhj9J3hxBwx77ry/OpAzhw0Ng1O1uJseysA9l9le5c/HoTe+zJSfTClL2cPtmTPPA73QQDcJDch/Ty3OHD7TGEeWwG8zQCRweuy1FZd6xDnXi0mr2iv3g5NUSjkrsv72z67CGdeAKBvAIFl/UsrV+XsTRCgHUQa+l4mTJc73I7yjqk3/u94tEqIShwqeyeAOtxnTjGAypdqHQ4HM13iKiVpWMmDU+rjxccXUiGPqQ6PAJPg1S2rj+DfqZLbr/95rLad3USGg84upANKE53dKlEo4QYi2R3qAO2zjv8+EKtE7kuh3x4JoD2elhXEPFpr/DjDZVODMRZXuG9S4iAmfLQxlue4ccbCp2gEMd7BvdMwEK3kUybSCKRd3v0co1SJwpdDoX38iCEKJc0G+IJ0wxlVboXCOKCytUdM3T9922q/Sfe6jLcngUcnfCa3xH9NtalV3hPg9hD2u7sle3PCBNqv5cYIG6wpz10/ANMOnn2uhaARZnrrCpgncRa2nkKYsRIgUKXQ+j01Mtc/yoCTur4RIAw0c+OKwGHBspLc3sgAusGRxoEZLochjLjvFQfZGuuEPJz0RsClhftzu2pDnLdlDo6lTImjtY4mv5DxaNWLmXGnc0z7vvBhWuRzAfMeP/EXFdZMt3s89qQpPMO4Q0pI+s+5HnsrLCPBHyB0tPaR0Lvm4EB/pdL5Lrx3Nzj3ewF+JCEdJuCnMK7XTPf0hL0RPEOq5p/ZTadcHB2ALvuKWFdeoX3LNqIKNt8GY0kk9qbJYNjr/LJjwNZNHB04jp3pNDlEN51rSHel91KRCIVnuHHGUqdKHQ55MUzBVXdbVmneIZPG5H7E3L8oNAJyfFfr+DeVZYA6XyHEEK6LGi8otKJJYTnAWoazUNrnewOqvdJhASCMEZPCVHrRK7LQTwN0tuwkDfl7JTcnnPqqg7pfEk4ZLLTrTlApomjizmS2zsdXSrR7EBhh+SGSJrWtXpxBIQKRyKddwiC4rQFxKKI/wXnMhxdSJ4gqQ6PQG8ZEIrV9C5xXTWBYFxCPz/XiScQaRYQIeAjhTWtZDx6b6ylbcQ8OIV7o7uh/i9+0krpwj011qFOHFoGwQmfrISB4j+Ba/saz5ze/O+JmVybJdAMXEKQB/rkRi0lxTe5WR0B/0g/2gZhHUwxJp8puR23daiBVpXVc+lFB4V8r3ZxmTn5WzrxBIJNYQavslCI9ZBa/egHPoPxeT8BHB24bgxi3bEOdeLRHoSzAKRDF6SuG0vv3BXKSQZhE8UIHyfob/ZQQNxAY5Oud5addSC7r9Ld0WgbJIrWPfQj224wY/rsbmmG0kLQQ24FLyFvLj13twDjbnps9I+BRZy8P1L0uq53R3bZFHPC0Z0W2gZ5c+nCd0g50iUupLcbee+6bnzDQXuHFPa7O5gQJM7hdDfU3IJoXAGp5jtXHTzbuYdnF13SGyBpdm9bcvYBnbhZZpZd6oF0ZutOE18KFIa4CZP4MrjtohIwY9IHH98CPltcGE9ug6jxfWVzyoqmfT5K79JafphmzF/ReUy/mThZGOYcC+F44SILgvUf3XhtmYWQlY4k68xPPn0PE8Va29dQji+V3OZNnzG/+wxHK7FHn56i2PTJz9hjPQ11mdv0aadhGDeA/F1yHGXwb37jHLWkZJWttUo4uvKFb4PY+64FrFF4aaha3f5Nv/GONhwZZXvUuXSs8btHnQk09yxM2/LSLWzUq7+dj58IEvdogGVjGRVeko6OfBPIIHyGhwChaspNtMBqrn7wOeXxeKMRlollA/k5JzyDc0+Qc06YwKszDpRP4WNVVV8SmB2fmGzlI42CppFvsCwsE12qNpR2OboJRGCD2HvSk8h1qOqzEYtK3vvgibDOI8wlLAPLAuo5ID7ArCGd/fppz47ysXYC4QFQdiT4iL/SxV3Lz8jJett0qV756sR4ZN9TJGKdwhuf0HJNb0Pdg+mklfaCslQG8D61L1EXj+x/ns/1TTe9bMN55rx7GANYB+kagwllhV9vfPvXIfXFAhWnTbASGyta1qf7CYmswXnlPIN8j/4gmxwdpE0oBrHPmyqKnM+HCiv9AcwxwHiRDykOI91MwnnkvKJ8StbGlplkD+uQz8JR40cxZo4aH6RwGH96FD5XMdY/VzEUceGDLoEofPJIn9H9yaPhFD4Kpk/hs3lqxuZn84ZT+LCkmsKnV49k/H169WgKHyc+kpwbZJDC57tT5I1BhlP4wH2eU9HcMUsIrCeTLDAssYP6A2wUrt4GW1WDVR1VPUOtrv3U/6m2DJxBptiAKNr6mmo9dzDlmlFhEC+cfgdk4zCcTDMmDDKWGLVngoxVCgbJMwoGyTMKBskzCgbJMwoGyTP+FwAA//90J9F1qkiYOAAAAABJRU5ErkJggg"}];
 var __map_reserved = {}
 var ArrayBuffer = $global.ArrayBuffer || js_html_compat_ArrayBuffer;
 if(ArrayBuffer.prototype.slice == null) {
 	ArrayBuffer.prototype.slice = js_html_compat_ArrayBuffer.sliceImpl;
 }
+var DataView = $global.DataView || js_html_compat_DataView;
 var Float32Array = $global.Float32Array || js_html_compat_Float32Array._new;
 var Uint8Array = $global.Uint8Array || js_html_compat_Uint8Array._new;
 Global.id = "heaps";
+Protean.id = "heaps";
 h3d_Buffer.GUID = 0;
 h3d_impl_GlDriver.TFILTERS = [[[9728,9728],[9729,9729]],[[9728,9984],[9729,9985]],[[9728,9986],[9729,9987]]];
 h3d_impl_GlDriver.TWRAP = [33071,10497];
@@ -20297,30 +24294,41 @@ h3d_mat_Texture.UID = 0;
 h3d_mat_Texture.nativeFormat = hxd_PixelFormat.RGBA;
 h3d_mat_Texture.COLOR_CACHE = new haxe_ds_IntMap();
 h3d_pass_Blur.__meta__ = { obj : { ignore : ["shader"]}, fields : { quality : { range : [1,4,1], inspect : null}, sigma : { range : [0,2], inspect : null}, passes : { range : [0,5,1], inspect : null}}};
-h3d_pass__$Border_BorderShader.SRC = "oy4:funsaoy4:argsahy4:exproy1:ejy13:hxsl.TExprDef:4:1aoR3jR4:5:3jy16:haxe.macro.Binop:4:0oR3jR4:1:1oy4:kindjy12:hxsl.VarKind:5:0y4:namey8:positiony4:typejy9:hxsl.Type:5:2i4jy12:hxsl.VecType:1:0y6:parentoR6r10R8y6:outputR10jR11:12:1ar9oR6r10R8y5:colorR10jR11:5:2i4r11R13r13y2:idi-174ghR16i-172gR16i-173gy1:poy4:filey95:D%3A%5CNeelts%5CPrograms%5CDev%5CHaxe%5Chaxe%5Clib%5Cheaps%2F0%2C9%2C0%2Fh3d%2Fpass%2FBorder.hxy3:maxi295y3:mini280gy1:tr12goR3jR4:8:2oR3jR4:2:1jy12:hxsl.TGlobal:40:0R17oR18R19R20i302R21i298gR22jR11:13:1ahgaoR3jR4:1:1oR6jR7:1:0R8R9R10jR11:5:2i2r11R13oR6r30R8y5:inputR10jR11:12:1ar29hR16i-170gR16i-171gR17oR18R19R20i317R21i303gR22r31goR3jR4:0:1jy10:hxsl.Const:3:1zR17oR18R19R20i320R21i319gR22jR11:3:0goR3jR4:0:1jR25:3:1i1R17oR18R19R20i323R21i322gR22r41ghR17oR18R19R20i324R21i298gR22jR11:5:2i4r11gR17oR18R19R20i324R21i280gR22r12ghR17oR18R19R20i330R21i274gR22jR11:0:0gR6jy17:hxsl.FunctionKind:0:0y3:refoR6jR7:6:0R8y6:vertexR10jR11:13:1aoR1ahy3:retr53ghR16i-175gR29r53goR1ahR2oR3jR4:4:1aoR3jR4:5:3r7oR3jR4:1:1r15R17oR18R19R20i374R21i362gR22r16goR3jR4:1:1oR6jR7:2:0R8R15R10jR11:5:2i4r11R16i-169gR17oR18R19R20i382R21i377gR22r72gR17oR18R19R20i382R21i362gR22r16ghR17oR18R19R20i388R21i356gR22r53gR6jR26:1:0R27oR6r56R8y8:fragmentR10jR11:13:1aoR1ahR29r53ghR16i-176gR29r53ghR8y29:h3d.pass._Border.BorderShadery4:varsar55r80r13r32r70hg";
-h3d_shader_ScreenShader.SRC = "oy4:funsaoy4:argsahy4:exproy1:ejy13:hxsl.TExprDef:4:1aoR3jR4:5:3jy16:haxe.macro.Binop:4:0oR3jR4:1:1oy4:kindjy12:hxsl.VarKind:5:0y4:namey8:positiony4:typejy9:hxsl.Type:5:2i4jy12:hxsl.VecType:1:0y6:parentoR6r10R8y6:outputR10jR11:12:1ar9oR6r10R8y5:colorR10jR11:5:2i4r11R13r13y2:idi-167ghR16i-165gR16i-166gy1:poy4:filey103:D%3A%5CNeelts%5CPrograms%5CDev%5CHaxe%5Chaxe%5Clib%5Cheaps%2F0%2C9%2C0%2Fh3d%2Fshader%2FScreenShader.hxy3:maxi262y3:mini247gy1:tr12goR3jR4:8:2oR3jR4:2:1jy12:hxsl.TGlobal:40:0R17oR18R19R20i269R21i265gR22jR11:13:1ahgaoR3jR4:1:1oR6jR7:1:0R8R9R10jR11:5:2i2r11R13oR6r30R8y5:inputR10jR11:12:1ar29oR6r30R8y2:uvR10jR11:5:2i2r11R13r32R16i-164ghR16i-162gR16i-163gR17oR18R19R20i284R21i270gR22r31goR3jR4:0:1jy10:hxsl.Const:3:1zR17oR18R19R20i287R21i286gR22jR11:3:0goR3jR4:0:1jR26:3:1i1R17oR18R19R20i290R21i289gR22r43ghR17oR18R19R20i291R21i265gR22jR11:5:2i4r11gR17oR18R19R20i291R21i247gR22r12ghR17oR18R19R20i297R21i241gR22jR11:0:0gR6jy17:hxsl.FunctionKind:0:0y3:refoR6jR7:6:0R8y6:vertexR10jR11:13:1aoR1ahy3:retr55ghR16i-168gR30r55ghR8y23:h3d.shader.ScreenShadery4:varsar57r13r32hg";
-h3d_pass__$Copy_CopyShader.SRC = "oy4:funsaoy4:argsahy4:exproy1:ejy13:hxsl.TExprDef:4:1aoR3jR4:5:3jy16:haxe.macro.Binop:4:0oR3jR4:1:1oy4:kindjy12:hxsl.VarKind:5:0y4:namey8:positiony4:typejy9:hxsl.Type:5:2i4jy12:hxsl.VecType:1:0y6:parentoR6r10R8y6:outputR10jR11:12:1ar9oR6r10R8y5:colorR10jR11:5:2i4r11R13r13y2:idi-290ghR16i-288gR16i-289gy1:poy4:filey103:D%3A%5CNeelts%5CPrograms%5CDev%5CHaxe%5Chaxe%5Clib%5Cheaps%2F0%2C9%2C0%2Fh3d%2Fshader%2FScreenShader.hxy3:maxi262y3:mini247gy1:tr12goR3jR4:8:2oR3jR4:2:1jy12:hxsl.TGlobal:40:0R17oR18R19R20i269R21i265gR22jR11:13:1ahgaoR3jR4:1:1oR6jR7:1:0R8R9R10jR11:5:2i2r11R13oR6r30R8y5:inputR10jR11:12:1ar29oR6r30R8y2:uvR10jR11:5:2i2r11R13r32R16i-287ghR16i-285gR16i-286gR17oR18R19R20i284R21i270gR22r31goR3jR4:0:1jy10:hxsl.Const:3:1zR17oR18R19R20i287R21i286gR22jR11:3:0goR3jR4:0:1jR26:3:1i1R17oR18R19R20i290R21i289gR22r43ghR17oR18R19R20i291R21i265gR22jR11:5:2i4r11gR17oR18R19R20i291R21i247gR22r12ghR17oR18R19R20i297R21i241gR22jR11:0:0gR6jy17:hxsl.FunctionKind:0:0y3:refoR6jR7:6:0R8y6:vertexR10jR11:13:1aoR1ahy3:retr55ghR16i-294gR30r55goR1ahR2oR3jR4:4:1aoR3jR4:5:3r7oR3jR4:1:1oR6jR7:4:0R8y12:calculatedUVR10jR11:5:2i2r11R16i-293gR17oR18y93:D%3A%5CNeelts%5CPrograms%5CDev%5CHaxe%5Chaxe%5Clib%5Cheaps%2F0%2C9%2C0%2Fh3d%2Fpass%2FCopy.hxR20i237R21i225gR22r71goR3jR4:1:1r34R17oR18R32R20i248R21i240gR22r35gR17oR18R32R20i248R21i225gR22r71ghR17oR18R32R20i254R21i219gR22r55gR6jR27:2:0R28oR6r58R8y8:__init__R10jR11:13:1aoR1ahR30r55ghR16i-295gR30r55goR1ahR2oR3jR4:4:1aoR3jR4:5:3r7oR3jR4:1:1oR6r70R8y10:pixelColorR10jR11:5:2i4r11R16i-292gR17oR18R32R20i304R21i294gR22r94goR3jR4:8:2oR3jR4:2:1jR23:33:0R17oR18R32R20i314R21i307gR22jR11:13:1aoR1aoR8y1:_R10jR11:10:0goR8R25R10jR11:5:2i2r11ghR30jR11:5:2i4r11ghgaoR3jR4:1:1oR6jR7:2:0R8y7:textureR10r106R16i-291gR17oR18R32R20i314R21i307gR22r106goR3jR4:1:1r69R17oR18R32R20i331R21i319gR22r71ghR17oR18R32R20i332R21i307gR22r109gR17oR18R32R20i332R21i294gR22r94ghR17oR18R32R20i338R21i288gR22r55gR6r81R28oR6r58R8y16:__init__fragmentR10jR11:13:1aoR1ahR30r55ghR16i-296gR30r55goR1ahR2oR3jR4:4:1aoR3jR4:5:3r7oR3jR4:1:1r15R17oR18R32R20i382R21i370gR22r16goR3jR4:1:1r93R17oR18R32R20i395R21i385gR22r94gR17oR18R32R20i395R21i370gR22r16ghR17oR18R32R20i401R21i364gR22r55gR6jR27:1:0R28oR6r58R8y8:fragmentR10jR11:13:1aoR1ahR30r55ghR16i-297gR30r55ghR8y25:h3d.pass._Copy.CopyShadery4:varsar69r57r82r147r113r126r13r32r93hg";
+h3d_pass__$Border_BorderShader.SRC = "oy4:funsaoy4:argsahy4:exproy1:ejy13:hxsl.TExprDef:4:1aoR3jR4:5:3jy16:haxe.macro.Binop:4:0oR3jR4:1:1oy4:kindjy12:hxsl.VarKind:5:0y4:namey8:positiony4:typejy9:hxsl.Type:5:2i4jy12:hxsl.VecType:1:0y6:parentoR6r10R8y6:outputR10jR11:12:1ar9oR6r10R8y5:colorR10jR11:5:2i4r11R13r13y2:idi-244ghR16i-242gR16i-243gy1:poy4:filey95:D%3A%5CNeelts%5CPrograms%5CDev%5CHaxe%5Chaxe%5Clib%5Cheaps%2F0%2C9%2C0%2Fh3d%2Fpass%2FBorder.hxy3:maxi295y3:mini280gy1:tr12goR3jR4:8:2oR3jR4:2:1jy12:hxsl.TGlobal:40:0R17oR18R19R20i302R21i298gR22jR11:13:1ahgaoR3jR4:1:1oR6jR7:1:0R8R9R10jR11:5:2i2r11R13oR6r30R8y5:inputR10jR11:12:1ar29hR16i-240gR16i-241gR17oR18R19R20i317R21i303gR22r31goR3jR4:0:1jy10:hxsl.Const:3:1zR17oR18R19R20i320R21i319gR22jR11:3:0goR3jR4:0:1jR25:3:1i1R17oR18R19R20i323R21i322gR22r41ghR17oR18R19R20i324R21i298gR22jR11:5:2i4r11gR17oR18R19R20i324R21i280gR22r12ghR17oR18R19R20i330R21i274gR22jR11:0:0gR6jy17:hxsl.FunctionKind:0:0y3:refoR6jR7:6:0R8y6:vertexR10jR11:13:1aoR1ahy3:retr53ghR16i-245gR29r53goR1ahR2oR3jR4:4:1aoR3jR4:5:3r7oR3jR4:1:1r15R17oR18R19R20i374R21i362gR22r16goR3jR4:1:1oR6jR7:2:0R8R15R10jR11:5:2i4r11R16i-239gR17oR18R19R20i382R21i377gR22r72gR17oR18R19R20i382R21i362gR22r16ghR17oR18R19R20i388R21i356gR22r53gR6jR26:1:0R27oR6r56R8y8:fragmentR10jR11:13:1aoR1ahR29r53ghR16i-246gR29r53ghR8y29:h3d.pass._Border.BorderShadery4:varsar55r80r13r32r70hg";
+h3d_shader_ScreenShader.SRC = "oy4:funsaoy4:argsahy4:exproy1:ejy13:hxsl.TExprDef:4:1aoR3jR4:5:3jy16:haxe.macro.Binop:4:0oR3jR4:1:1oy4:kindjy12:hxsl.VarKind:5:0y4:namey8:positiony4:typejy9:hxsl.Type:5:2i4jy12:hxsl.VecType:1:0y6:parentoR6r10R8y6:outputR10jR11:12:1ar9oR6r10R8y5:colorR10jR11:5:2i4r11R13r13y2:idi-237ghR16i-235gR16i-236gy1:poy4:filey103:D%3A%5CNeelts%5CPrograms%5CDev%5CHaxe%5Chaxe%5Clib%5Cheaps%2F0%2C9%2C0%2Fh3d%2Fshader%2FScreenShader.hxy3:maxi262y3:mini247gy1:tr12goR3jR4:8:2oR3jR4:2:1jy12:hxsl.TGlobal:40:0R17oR18R19R20i269R21i265gR22jR11:13:1ahgaoR3jR4:1:1oR6jR7:1:0R8R9R10jR11:5:2i2r11R13oR6r30R8y5:inputR10jR11:12:1ar29oR6r30R8y2:uvR10jR11:5:2i2r11R13r32R16i-234ghR16i-232gR16i-233gR17oR18R19R20i284R21i270gR22r31goR3jR4:0:1jy10:hxsl.Const:3:1zR17oR18R19R20i287R21i286gR22jR11:3:0goR3jR4:0:1jR26:3:1i1R17oR18R19R20i290R21i289gR22r43ghR17oR18R19R20i291R21i265gR22jR11:5:2i4r11gR17oR18R19R20i291R21i247gR22r12ghR17oR18R19R20i297R21i241gR22jR11:0:0gR6jy17:hxsl.FunctionKind:0:0y3:refoR6jR7:6:0R8y6:vertexR10jR11:13:1aoR1ahy3:retr55ghR16i-238gR30r55ghR8y23:h3d.shader.ScreenShadery4:varsar57r13r32hg";
+h3d_pass__$Copy_CopyShader.SRC = "oy4:funsaoy4:argsahy4:exproy1:ejy13:hxsl.TExprDef:4:1aoR3jR4:5:3jy16:haxe.macro.Binop:4:0oR3jR4:1:1oy4:kindjy12:hxsl.VarKind:5:0y4:namey8:positiony4:typejy9:hxsl.Type:5:2i4jy12:hxsl.VecType:1:0y6:parentoR6r10R8y6:outputR10jR11:12:1ar9oR6r10R8y5:colorR10jR11:5:2i4r11R13r13y2:idi-293ghR16i-291gR16i-292gy1:poy4:filey103:D%3A%5CNeelts%5CPrograms%5CDev%5CHaxe%5Chaxe%5Clib%5Cheaps%2F0%2C9%2C0%2Fh3d%2Fshader%2FScreenShader.hxy3:maxi262y3:mini247gy1:tr12goR3jR4:8:2oR3jR4:2:1jy12:hxsl.TGlobal:40:0R17oR18R19R20i269R21i265gR22jR11:13:1ahgaoR3jR4:1:1oR6jR7:1:0R8R9R10jR11:5:2i2r11R13oR6r30R8y5:inputR10jR11:12:1ar29oR6r30R8y2:uvR10jR11:5:2i2r11R13r32R16i-290ghR16i-288gR16i-289gR17oR18R19R20i284R21i270gR22r31goR3jR4:0:1jy10:hxsl.Const:3:1zR17oR18R19R20i287R21i286gR22jR11:3:0goR3jR4:0:1jR26:3:1i1R17oR18R19R20i290R21i289gR22r43ghR17oR18R19R20i291R21i265gR22jR11:5:2i4r11gR17oR18R19R20i291R21i247gR22r12ghR17oR18R19R20i297R21i241gR22jR11:0:0gR6jy17:hxsl.FunctionKind:0:0y3:refoR6jR7:6:0R8y6:vertexR10jR11:13:1aoR1ahy3:retr55ghR16i-297gR30r55goR1ahR2oR3jR4:4:1aoR3jR4:5:3r7oR3jR4:1:1oR6jR7:4:0R8y12:calculatedUVR10jR11:5:2i2r11R16i-296gR17oR18y93:D%3A%5CNeelts%5CPrograms%5CDev%5CHaxe%5Chaxe%5Clib%5Cheaps%2F0%2C9%2C0%2Fh3d%2Fpass%2FCopy.hxR20i237R21i225gR22r71goR3jR4:1:1r34R17oR18R32R20i248R21i240gR22r35gR17oR18R32R20i248R21i225gR22r71ghR17oR18R32R20i254R21i219gR22r55gR6jR27:2:0R28oR6r58R8y8:__init__R10jR11:13:1aoR1ahR30r55ghR16i-298gR30r55goR1ahR2oR3jR4:4:1aoR3jR4:5:3r7oR3jR4:1:1oR6r70R8y10:pixelColorR10jR11:5:2i4r11R16i-295gR17oR18R32R20i304R21i294gR22r94goR3jR4:8:2oR3jR4:2:1jR23:33:0R17oR18R32R20i314R21i307gR22jR11:13:1aoR1aoR8y1:_R10jR11:10:0goR8R25R10jR11:5:2i2r11ghR30jR11:5:2i4r11ghgaoR3jR4:1:1oR6jR7:2:0R8y7:textureR10r106R16i-294gR17oR18R32R20i314R21i307gR22r106goR3jR4:1:1r69R17oR18R32R20i331R21i319gR22r71ghR17oR18R32R20i332R21i307gR22r109gR17oR18R32R20i332R21i294gR22r94ghR17oR18R32R20i338R21i288gR22r55gR6r81R28oR6r58R8y16:__init__fragmentR10jR11:13:1aoR1ahR30r55ghR16i-299gR30r55goR1ahR2oR3jR4:4:1aoR3jR4:5:3r7oR3jR4:1:1r15R17oR18R32R20i382R21i370gR22r16goR3jR4:1:1r93R17oR18R32R20i395R21i385gR22r94gR17oR18R32R20i395R21i370gR22r16ghR17oR18R32R20i401R21i364gR22r55gR6jR27:1:0R28oR6r58R8y8:fragmentR10jR11:13:1aoR1ahR30r55ghR16i-300gR30r55ghR8y25:h3d.pass._Copy.CopyShadery4:varsar69r57r82r147r113r126r13r32r93hg";
 h3d_pass_Default.__meta__ = { fields : { cameraView : { global : ["camera.view"]}, cameraNear : { global : ["camera.zNear"]}, cameraFar : { global : ["camera.zFar"]}, cameraProj : { global : ["camera.proj"]}, cameraPos : { global : ["camera.position"]}, cameraProjDiag : { global : ["camera.projDiag"]}, cameraViewProj : { global : ["camera.viewProj"]}, cameraInverseViewProj : { global : ["camera.inverseViewProj"]}, globalTime : { global : ["global.time"]}, pixelSize : { global : ["global.pixelSize"]}, globalModelView : { global : ["global.modelView"]}, globalModelViewInverse : { global : ["global.modelViewInverse"]}}};
 h3d_pass__$HardwarePick_FixedColor.SRC = "oy4:funsaoy4:argsahy4:exproy1:ejy13:hxsl.TExprDef:4:1aoR3jR4:5:3jy16:haxe.macro.Binop:4:0oR3jR4:1:1oy4:kindjy12:hxsl.VarKind:5:0y4:namey12:pickPositiony4:typejy9:hxsl.Type:5:2i4jy12:hxsl.VecType:1:0y6:parentoR6r10R8y6:outputR10jR11:12:1aoR6r10R8y8:positionR10jR11:5:2i4r11R13r13y2:idi-4gr9oR6r10R8y7:colorIDR10jR11:5:2i4r11R13r13R16i-6ghR16i-3gR16i-5gy1:poy4:filey101:D%3A%5CNeelts%5CPrograms%5CDev%5CHaxe%5Chaxe%5Clib%5Cheaps%2F0%2C9%2C0%2Fh3d%2Fpass%2FHardwarePick.hxy3:maxi274y3:mini255gy1:tr12goR3jR4:5:3jR5:1:0oR3jR4:3:1oR3jR4:5:3jR5:0:0oR3jR4:1:1r15R18oR19R20R21i293R22i278gR23r16goR3jR4:5:3r23oR3jR4:8:2oR3jR4:2:1jy12:hxsl.TGlobal:40:0R18oR19R20R21i300R22i296gR23jR11:13:1ahgaoR3jR4:9:2oR3jR4:1:1oR6jR7:2:0R8y8:viewportR10jR11:5:2i4r11R16i-2gR18oR19R20R21i309R22i301gR23r43gajy14:hxsl.Component:0:0jR26:1:0hR18oR19R20R21i312R22i301gR23jR11:5:2i2r11goR3jR4:0:1jy10:hxsl.Const:3:1d0R18oR19R20R21i316R22i314gR23jR11:3:0goR3jR4:0:1jR27:3:1d0R18oR19R20R21i320R22i318gR23r56ghR18oR19R20R21i321R22i296gR23jR11:5:2i4r11goR3jR4:9:2oR3jR4:1:1r15R18oR19R20R21i339R22i324gR23r16gajR26:3:0hR18oR19R20R21i341R22i324gR23r56gR18oR19R20R21i341R22i296gR23r63gR18oR19R20R21i341R22i278gR23jR11:5:2i4r11gR18oR19R20R21i342R22i277gR23r76goR3jR4:8:2oR3jR4:2:1r33R18oR19R20R21i349R22i345gR23r37gaoR3jR4:9:2oR3jR4:1:1r41R18oR19R20R21i358R22i350gR23r43gajR26:2:0r69hR18oR19R20R21i361R22i350gR23jR11:5:2i2r11goR3jR4:0:1jR27:3:1d1R18oR19R20R21i365R22i363gR23r56goR3jR4:0:1jR27:3:1d1R18oR19R20R21i369R22i367gR23r56ghR18oR19R20R21i370R22i345gR23jR11:5:2i4r11gR18oR19R20R21i370R22i277gR23jR11:5:2i4r11gR18oR19R20R21i370R22i255gR23r12ghR18oR19R20R21i375R22i250gR23jR11:0:0gR6jy17:hxsl.FunctionKind:0:0y3:refoR6jR7:6:0R8y6:vertexR10jR11:13:1aoR1ahy3:retr111ghR16i-7gR31r111goR1ahR2oR3jR4:4:1aoR3jR4:5:3r7oR3jR4:1:1r17R18oR19R20R21i417R22i403gR23r18goR3jR4:1:1oR6r42R8R17R10jR11:5:2i4r11R16i-1gR18oR19R20R21i427R22i420gR23r129gR18oR19R20R21i427R22i403gR23r18ghR18oR19R20R21i432R22i398gR23r111gR6jR28:1:0R29oR6r114R8y8:fragmentR10jR11:13:1aoR1ahR31r111ghR16i-8gR31r111ghR8y33:h3d.pass._HardwarePick.FixedColory4:varsar113r137r128r13r41hg";
 h3d_pass_ShadowMap.__meta__ = { fields : { border : { ignore : null}}};
-h3d_shader_AmbientLight.SRC = "oy4:funsaoy4:argsahy4:exproy1:ejy13:hxsl.TExprDef:4:1aoR3jR4:5:3jy16:haxe.macro.Binop:4:0oR3jR4:1:1oy4:kindjy12:hxsl.VarKind:4:0y4:namey10:lightColory4:typejy9:hxsl.Type:5:2i3jy12:hxsl.VecType:1:0y2:idi-154gy1:poy4:filey103:D%3A%5CNeelts%5CPrograms%5CDev%5CHaxe%5Chaxe%5Clib%5Cheaps%2F0%2C9%2C0%2Fh3d%2Fshader%2FAmbientLight.hxy3:maxi349y3:mini339gy1:tr12goR3jR4:10:3oR3jR4:1:1oR6jR7:2:0R8y8:additiveR10jR11:2:0y10:qualifiersajy17:hxsl.VarQualifier:0:1nhR13i-155gR14oR15R16R17i360R18i352gR19r19goR3jR4:1:1oR6jR7:0:0R8y12:ambientLightR10jR11:5:2i3r11y6:parentoR6r26R8y6:globalR10jR11:12:1ar25oR6r26R8y16:perPixelLightingR10r19R24r28R21ajR22:0:1nhR13i-151ghR13i-149gR13i-150gR14oR15R16R17i382R18i363gR19r27goR3jR4:8:2oR3jR4:2:1jy12:hxsl.TGlobal:39:0R14oR15R16R17i389R18i385gR19jR11:13:1ahgaoR3jR4:0:1jy10:hxsl.Const:3:1d0R14oR15R16R17i392R18i390gR19jR11:3:0ghR14oR15R16R17i393R18i385gR19jR11:5:2i3r11gR14oR15R16R17i393R18i352gR19r27gR14oR15R16R17i393R18i339gR19r12ghR14oR15R16R17i399R18i333gR19jR11:0:0gR6jy17:hxsl.FunctionKind:2:0y3:refoR6jR7:6:0R8y8:__init__R10jR11:13:1aoR1ahy3:retr58ghR13i-156gR32r58goR1ahR2oR3jR4:4:1aoR3jR4:5:3r7oR3jR4:1:1oR6r10R8y15:lightPixelColorR10jR11:5:2i3r11R13i-153gR14oR15R16R17i454R18i439gR19r73goR3jR4:10:3oR3jR4:1:1r17R14oR15R16R17i465R18i457gR19r19goR3jR4:1:1r25R14oR15R16R17i487R18i468gR19r27goR3jR4:8:2oR3jR4:2:1r38R14oR15R16R17i494R18i490gR19r42gaoR3jR4:0:1jR28:3:1d0R14oR15R16R17i497R18i495gR19r48ghR14oR15R16R17i498R18i490gR19jR11:5:2i3r11gR14oR15R16R17i498R18i457gR19r27gR14oR15R16R17i498R18i439gR19r73ghR14oR15R16R17i504R18i433gR19r58gR6r59R30oR6r61R8y16:__init__fragmentR10jR11:13:1aoR1ahR32r58ghR13i-157gR32r58goR1aoR6r10R8R9R10jR11:5:2i3r11R13i-158ghR2oR3jR4:4:1aoR3jR4:12:1oR3jR4:10:3oR3jR4:1:1r17R14oR15R16R17i578R18i570gR19r19goR3jR4:1:1r108R14oR15R16R17i591R18i581gR19r109goR3jR4:3:1oR3jR4:5:3jR5:0:0oR3jR4:1:1r25R14oR15R16R17i614R18i595gR19r27goR3jR4:5:3jR5:1:0oR3jR4:8:2oR3jR4:2:1jR27:22:0R14oR15R16R17i642R18i617gR19jR11:13:1aoR1aoR8y1:_R10r27goR8y1:bR10r48ghR32jR11:5:2i3r11ghgaoR3jR4:3:1oR3jR4:5:3jR5:3:0oR3jR4:0:1jR28:3:1i1R14oR15R16R17i619R18i618gR19r48goR3jR4:1:1r25R14oR15R16R17i641R18i622gR19r27gR14oR15R16R17i641R18i618gR19r27gR14oR15R16R17i642R18i617gR19r27goR3jR4:0:1jR28:3:1d0R14oR15R16R17i649R18i647gR19r48ghR14oR15R16R17i650R18i617gR19r138goR3jR4:1:1r108R14oR15R16R17i663R18i653gR19r109gR14oR15R16R17i663R18i617gR19jR11:5:2i3r11gR14oR15R16R17i663R18i595gR19jR11:5:2i3r11gR14oR15R16R17i664R18i594gR19r169gR14oR15R16R17i664R18i570gR19r109gR14oR15R16R17i664R18i563gR19r58ghR14oR15R16R17i670R18i557gR19r58gR6jR29:3:0R30oR6r61R8y9:calcLightR10jR11:13:1aoR1aoR8R9R10r109ghR32jR11:5:2i3r11ghR13i-159gR32r184goR1ahR2oR3jR4:4:1aoR3jR4:10:3oR3jR4:6:2jy15:haxe.macro.Unop:2:0oR3jR4:1:1r30R14oR15R16R17i728R18i705gR19r19gR14oR15R16R17i728R18i704gR19r19goR3jR4:5:3jR5:20:1r127oR3jR4:9:2oR3jR4:1:1oR6r10R8y10:pixelColorR10jR11:5:2i4r11R13i-152gR14oR15R16R17i741R18i731gR19r203gajy14:hxsl.Component:0:0jR40:1:0jR40:2:0hR14oR15R16R17i745R18i731gR19jR11:5:2i3r11goR3jR4:8:2oR3jR4:1:1r179R14oR15R16R17i758R18i749gR19r185gaoR3jR4:1:1r9R14oR15R16R17i769R18i759gR19r12ghR14oR15R16R17i770R18i749gR19r184gR14oR15R16R17i770R18i731gR19r212gnR14oR15R16R17i770R18i700gR19r58ghR14oR15R16R17i776R18i694gR19r58gR6jR29:0:0R30oR6r61R8y6:vertexR10jR11:13:1aoR1ahR32r58ghR13i-160gR32r58goR1ahR2oR3jR4:4:1aoR3jR4:10:3oR3jR4:1:1r30R14oR15R16R17i835R18i812gR19r19goR3jR4:5:3jR5:20:1r127oR3jR4:9:2oR3jR4:1:1r202R14oR15R16R17i848R18i838gR19r203gar207r208r209hR14oR15R16R17i852R18i838gR19jR11:5:2i3r11goR3jR4:8:2oR3jR4:1:1r179R14oR15R16R17i865R18i856gR19r185gaoR3jR4:1:1r72R14oR15R16R17i881R18i866gR19r73ghR14oR15R16R17i882R18i856gR19r184gR14oR15R16R17i882R18i838gR19r252gnR14oR15R16R17i882R18i808gR19r58ghR14oR15R16R17i888R18i802gR19r58gR6jR29:1:0R30oR6r61R8y8:fragmentR10jR11:13:1aoR1ahR32r58ghR13i-161gR32r58ghR8y23:h3d.shader.AmbientLighty4:varsar230r9r60r270r17r101r179r28r202r72hg";
+h3d_shader_AmbientLight.SRC = "oy4:funsaoy4:argsahy4:exproy1:ejy13:hxsl.TExprDef:4:1aoR3jR4:5:3jy16:haxe.macro.Binop:4:0oR3jR4:1:1oy4:kindjy12:hxsl.VarKind:4:0y4:namey10:lightColory4:typejy9:hxsl.Type:5:2i3jy12:hxsl.VecType:1:0y2:idi-224gy1:poy4:filey103:D%3A%5CNeelts%5CPrograms%5CDev%5CHaxe%5Chaxe%5Clib%5Cheaps%2F0%2C9%2C0%2Fh3d%2Fshader%2FAmbientLight.hxy3:maxi349y3:mini339gy1:tr12goR3jR4:10:3oR3jR4:1:1oR6jR7:2:0R8y8:additiveR10jR11:2:0y10:qualifiersajy17:hxsl.VarQualifier:0:1nhR13i-225gR14oR15R16R17i360R18i352gR19r19goR3jR4:1:1oR6jR7:0:0R8y12:ambientLightR10jR11:5:2i3r11y6:parentoR6r26R8y6:globalR10jR11:12:1ar25oR6r26R8y16:perPixelLightingR10r19R24r28R21ajR22:0:1nhR13i-221ghR13i-219gR13i-220gR14oR15R16R17i382R18i363gR19r27goR3jR4:8:2oR3jR4:2:1jy12:hxsl.TGlobal:39:0R14oR15R16R17i389R18i385gR19jR11:13:1ahgaoR3jR4:0:1jy10:hxsl.Const:3:1d0R14oR15R16R17i392R18i390gR19jR11:3:0ghR14oR15R16R17i393R18i385gR19jR11:5:2i3r11gR14oR15R16R17i393R18i352gR19r27gR14oR15R16R17i393R18i339gR19r12ghR14oR15R16R17i399R18i333gR19jR11:0:0gR6jy17:hxsl.FunctionKind:2:0y3:refoR6jR7:6:0R8y8:__init__R10jR11:13:1aoR1ahy3:retr58ghR13i-226gR32r58goR1ahR2oR3jR4:4:1aoR3jR4:5:3r7oR3jR4:1:1oR6r10R8y15:lightPixelColorR10jR11:5:2i3r11R13i-223gR14oR15R16R17i454R18i439gR19r73goR3jR4:10:3oR3jR4:1:1r17R14oR15R16R17i465R18i457gR19r19goR3jR4:1:1r25R14oR15R16R17i487R18i468gR19r27goR3jR4:8:2oR3jR4:2:1r38R14oR15R16R17i494R18i490gR19r42gaoR3jR4:0:1jR28:3:1d0R14oR15R16R17i497R18i495gR19r48ghR14oR15R16R17i498R18i490gR19jR11:5:2i3r11gR14oR15R16R17i498R18i457gR19r27gR14oR15R16R17i498R18i439gR19r73ghR14oR15R16R17i504R18i433gR19r58gR6r59R30oR6r61R8y16:__init__fragmentR10jR11:13:1aoR1ahR32r58ghR13i-227gR32r58goR1aoR6r10R8R9R10jR11:5:2i3r11R13i-228ghR2oR3jR4:4:1aoR3jR4:12:1oR3jR4:10:3oR3jR4:1:1r17R14oR15R16R17i578R18i570gR19r19goR3jR4:1:1r108R14oR15R16R17i591R18i581gR19r109goR3jR4:3:1oR3jR4:5:3jR5:0:0oR3jR4:1:1r25R14oR15R16R17i614R18i595gR19r27goR3jR4:5:3jR5:1:0oR3jR4:8:2oR3jR4:2:1jR27:22:0R14oR15R16R17i642R18i617gR19jR11:13:1aoR1aoR8y1:_R10r27goR8y1:bR10r48ghR32jR11:5:2i3r11ghgaoR3jR4:3:1oR3jR4:5:3jR5:3:0oR3jR4:0:1jR28:3:1i1R14oR15R16R17i619R18i618gR19r48goR3jR4:1:1r25R14oR15R16R17i641R18i622gR19r27gR14oR15R16R17i641R18i618gR19r27gR14oR15R16R17i642R18i617gR19r27goR3jR4:0:1jR28:3:1d0R14oR15R16R17i649R18i647gR19r48ghR14oR15R16R17i650R18i617gR19r138goR3jR4:1:1r108R14oR15R16R17i663R18i653gR19r109gR14oR15R16R17i663R18i617gR19jR11:5:2i3r11gR14oR15R16R17i663R18i595gR19jR11:5:2i3r11gR14oR15R16R17i664R18i594gR19r169gR14oR15R16R17i664R18i570gR19r109gR14oR15R16R17i664R18i563gR19r58ghR14oR15R16R17i670R18i557gR19r58gR6jR29:3:0R30oR6r61R8y9:calcLightR10jR11:13:1aoR1aoR8R9R10r109ghR32jR11:5:2i3r11ghR13i-229gR32r184goR1ahR2oR3jR4:4:1aoR3jR4:10:3oR3jR4:6:2jy15:haxe.macro.Unop:2:0oR3jR4:1:1r30R14oR15R16R17i728R18i705gR19r19gR14oR15R16R17i728R18i704gR19r19goR3jR4:5:3jR5:20:1r127oR3jR4:9:2oR3jR4:1:1oR6r10R8y10:pixelColorR10jR11:5:2i4r11R13i-222gR14oR15R16R17i741R18i731gR19r203gajy14:hxsl.Component:0:0jR40:1:0jR40:2:0hR14oR15R16R17i745R18i731gR19jR11:5:2i3r11goR3jR4:8:2oR3jR4:1:1r179R14oR15R16R17i758R18i749gR19r185gaoR3jR4:1:1r9R14oR15R16R17i769R18i759gR19r12ghR14oR15R16R17i770R18i749gR19r184gR14oR15R16R17i770R18i731gR19r212gnR14oR15R16R17i770R18i700gR19r58ghR14oR15R16R17i776R18i694gR19r58gR6jR29:0:0R30oR6r61R8y6:vertexR10jR11:13:1aoR1ahR32r58ghR13i-230gR32r58goR1ahR2oR3jR4:4:1aoR3jR4:10:3oR3jR4:1:1r30R14oR15R16R17i835R18i812gR19r19goR3jR4:5:3jR5:20:1r127oR3jR4:9:2oR3jR4:1:1r202R14oR15R16R17i848R18i838gR19r203gar207r208r209hR14oR15R16R17i852R18i838gR19jR11:5:2i3r11goR3jR4:8:2oR3jR4:1:1r179R14oR15R16R17i865R18i856gR19r185gaoR3jR4:1:1r72R14oR15R16R17i881R18i866gR19r73ghR14oR15R16R17i882R18i856gR19r184gR14oR15R16R17i882R18i838gR19r252gnR14oR15R16R17i882R18i808gR19r58ghR14oR15R16R17i888R18i802gR19r58gR6jR29:1:0R30oR6r61R8y8:fragmentR10jR11:13:1aoR1ahR32r58ghR13i-231gR32r58ghR8y23:h3d.shader.AmbientLighty4:varsar230r9r60r270r17r101r179r28r202r72hg";
 h3d_shader_Base2d.SRC = "oy4:funsaoy4:argsahy4:exproy1:ejy13:hxsl.TExprDef:4:1aoR3jR4:5:3jy16:haxe.macro.Binop:4:0oR3jR4:1:1oy4:kindjy12:hxsl.VarKind:4:0y4:namey14:spritePositiony4:typejy9:hxsl.Type:5:2i4jy12:hxsl.VecType:1:0y2:idi-127gy1:poy4:filey97:D%3A%5CNeelts%5CPrograms%5CDev%5CHaxe%5Chaxe%5Clib%5Cheaps%2F0%2C9%2C0%2Fh3d%2Fshader%2FBase2d.hxy3:maxi983y3:mini969gy1:tr12goR3jR4:8:2oR3jR4:2:1jy12:hxsl.TGlobal:40:0R14oR15R16R17i990R18i986gR19jR11:13:1ahgaoR3jR4:1:1oR6jR7:1:0R8y8:positionR10jR11:5:2i2r11y6:parentoR6r25R8y5:inputR10jR11:12:1ar24oR6r25R8y2:uvR10jR11:5:2i2r11R22r27R13i-119goR6r25R8y5:colorR10jR11:5:2i4r11R22r27R13i-120ghR13i-117gR13i-118gR14oR15R16R17i1005R18i991gR19r26goR3jR4:1:1oR6jR7:2:0R8y6:zValueR10jR11:3:0R13i-125gR14oR15R16R17i1013R18i1007gR19r39goR3jR4:0:1jy10:hxsl.Const:3:1i1R14oR15R16R17i1016R18i1015gR19r39ghR14oR15R16R17i1017R18i986gR19jR11:5:2i4r11gR14oR15R16R17i1017R18i969gR19r12goR3jR4:10:3oR3jR4:1:1oR6r38R8y10:isRelativeR10jR11:2:0y10:qualifiersajy17:hxsl.VarQualifier:0:1nhR13i-132gR14oR15R16R17i1037R18i1027gR19r54goR3jR4:4:1aoR3jR4:5:3r7oR3jR4:9:2oR3jR4:1:1oR6r10R8y16:absolutePositionR10jR11:5:2i4r11R13i-128gR14oR15R16R17i1063R18i1047gR19r65gajy14:hxsl.Component:0:0hR14oR15R16R17i1065R18i1047gR19r39goR3jR4:8:2oR3jR4:2:1jR20:29:0R14oR15R16R17i1093R18i1068gR19jR11:13:1aoR1aoR8y1:_R10jR11:5:2i3r11goR8y1:bR10jR11:5:2i3r11ghy3:retr39ghgaoR3jR4:8:2oR3jR4:2:1jR20:39:0R14oR15R16R17i1072R18i1068gR19jR11:13:1ahgaoR3jR4:9:2oR3jR4:1:1r9R14oR15R16R17i1087R18i1073gR19r12gar69jR32:1:0hR14oR15R16R17i1090R18i1073gR19jR11:5:2i2r11goR3jR4:0:1jR27:3:1i1R14oR15R16R17i1092R18i1091gR19r39ghR14oR15R16R17i1093R18i1068gR19r81goR3jR4:1:1oR6r38R8y15:absoluteMatrixAR10jR11:5:2i3r11R13i-134gR14oR15R16R17i1113R18i1098gR19r111ghR14oR15R16R17i1114R18i1068gR19r39gR14oR15R16R17i1114R18i1047gR19r39goR3jR4:5:3r7oR3jR4:9:2oR3jR4:1:1r64R14oR15R16R17i1137R18i1121gR19r65gar99hR14oR15R16R17i1139R18i1121gR19r39goR3jR4:8:2oR3jR4:2:1r74R14oR15R16R17i1167R18i1142gR19jR11:13:1aoR1aoR8R33R10jR11:5:2i3r11gr82hR35r39ghgaoR3jR4:8:2oR3jR4:2:1r88R14oR15R16R17i1146R18i1142gR19r92gaoR3jR4:9:2oR3jR4:1:1r9R14oR15R16R17i1161R18i1147gR19r12gar69r99hR14oR15R16R17i1164R18i1147gR19jR11:5:2i2r11goR3jR4:0:1jR27:3:1i1R14oR15R16R17i1166R18i1165gR19r39ghR14oR15R16R17i1167R18i1142gR19r134goR3jR4:1:1oR6r38R8y15:absoluteMatrixBR10jR11:5:2i3r11R13i-135gR14oR15R16R17i1187R18i1172gR19r158ghR14oR15R16R17i1188R18i1142gR19r39gR14oR15R16R17i1188R18i1121gR19r39goR3jR4:5:3r7oR3jR4:9:2oR3jR4:1:1r64R14oR15R16R17i1211R18i1195gR19r65gajR32:2:0jR32:3:0hR14oR15R16R17i1214R18i1195gR19jR11:5:2i2r11goR3jR4:9:2oR3jR4:1:1r9R14oR15R16R17i1231R18i1217gR19r12gar171r172hR14oR15R16R17i1234R18i1217gR19jR11:5:2i2r11gR14oR15R16R17i1234R18i1195gR19r175ghR14oR15R16R17i1241R18i1040gR19jR11:0:0goR3jR4:5:3r7oR3jR4:1:1r64R14oR15R16R17i1268R18i1252gR19r65goR3jR4:1:1r9R14oR15R16R17i1285R18i1271gR19r12gR14oR15R16R17i1285R18i1252gR19r65gR14oR15R16R17i1285R18i1023gR19r188goR3jR4:5:3r7oR3jR4:1:1oR6jR7:3:0R8y12:calculatedUVR10jR11:5:2i2r11R13i-131gR14oR15R16R17i1303R18i1291gR19r204goR3jR4:10:3oR3jR4:1:1oR6r38R8y8:hasUVPosR10r54R29ajR30:0:1nhR13i-138gR14oR15R16R17i1314R18i1306gR19r54goR3jR4:5:3jR5:0:0oR3jR4:5:3jR5:1:0oR3jR4:1:1r29R14oR15R16R17i1325R18i1317gR19r30goR3jR4:9:2oR3jR4:1:1oR6r38R8y5:uvPosR10jR11:5:2i4r11R13i-139gR14oR15R16R17i1333R18i1328gR19r224gar171r172hR14oR15R16R17i1336R18i1328gR19jR11:5:2i2r11gR14oR15R16R17i1336R18i1317gR19jR11:5:2i2r11goR3jR4:9:2oR3jR4:1:1r223R14oR15R16R17i1344R18i1339gR19r224gar69r99hR14oR15R16R17i1347R18i1339gR19jR11:5:2i2r11gR14oR15R16R17i1347R18i1317gR19jR11:5:2i2r11goR3jR4:1:1r29R14oR15R16R17i1358R18i1350gR19r30gR14oR15R16R17i1358R18i1306gR19r244gR14oR15R16R17i1358R18i1291gR19r204goR3jR4:5:3r7oR3jR4:1:1oR6r10R8y10:pixelColorR10jR11:5:2i4r11R13i-129gR14oR15R16R17i1374R18i1364gR19r255goR3jR4:10:3oR3jR4:1:1r53R14oR15R16R17i1387R18i1377gR19r54goR3jR4:5:3r217oR3jR4:1:1oR6r38R8R25R10jR11:5:2i4r11R13i-133gR14oR15R16R17i1395R18i1390gR19r265goR3jR4:1:1r31R14oR15R16R17i1409R18i1398gR19r32gR14oR15R16R17i1409R18i1390gR19jR11:5:2i4r11goR3jR4:1:1r31R14oR15R16R17i1423R18i1412gR19r32gR14oR15R16R17i1423R18i1377gR19r273gR14oR15R16R17i1423R18i1364gR19r255goR3jR4:5:3r7oR3jR4:1:1oR6r10R8y12:textureColorR10jR11:5:2i4r11R13i-130gR14oR15R16R17i1441R18i1429gR19r284goR3jR4:8:2oR3jR4:2:1jR20:33:0R14oR15R16R17i1451R18i1444gR19jR11:13:1aoR1aoR8R33R10jR11:10:0goR8R24R10jR11:5:2i2r11ghR35jR11:5:2i4r11ghgaoR3jR4:1:1oR6r38R8y7:textureR10r296R13i-126gR14oR15R16R17i1451R18i1444gR19r296goR3jR4:1:1r202R14oR15R16R17i1468R18i1456gR19r204ghR14oR15R16R17i1469R18i1444gR19r299gR14oR15R16R17i1469R18i1429gR19r284goR3jR4:5:3jR5:20:1r217oR3jR4:1:1r254R14oR15R16R17i1485R18i1475gR19r255goR3jR4:1:1r283R14oR15R16R17i1501R18i1489gR19r284gR14oR15R16R17i1501R18i1475gR19r255ghR14oR15R16R17i1507R18i963gR19r188gR6jy17:hxsl.FunctionKind:2:0y3:refoR6jR7:6:0R8y8:__init__R10jR11:13:1aoR1ahR35r188ghR13i-145gR35r188goR1ahR2oR3jR4:4:1aoR3jR4:7:2oR6r10R8y3:tmpR10jR11:5:2i3r11R13i-148goR3jR4:8:2oR3jR4:2:1r88R14oR15R16R17i1610R18i1606gR19r92gaoR3jR4:9:2oR3jR4:1:1r64R14oR15R16R17i1627R18i1611gR19r65gar69r99hR14oR15R16R17i1630R18i1611gR19jR11:5:2i2r11goR3jR4:0:1jR27:3:1i1R14oR15R16R17i1633R18i1632gR19r39ghR14oR15R16R17i1634R18i1606gR19r338gR14oR15R16R17i1635R18i1596gR19r188goR3jR4:5:3r7oR3jR4:1:1oR6r10R8y14:outputPositionR10jR11:5:2i4r11R13i-144gR14oR15R16R17i1654R18i1640gR19r363goR3jR4:8:2oR3jR4:2:1r17R14oR15R16R17i1661R18i1657gR19r21gaoR3jR4:8:2oR3jR4:2:1r74R14oR15R16R17i1671R18i1668gR19jR11:13:1aoR1aoR8R33R10r338gr82hR35r39ghgaoR3jR4:1:1r337R14oR15R16R17i1671R18i1668gR19r338goR3jR4:1:1oR6r38R8y13:filterMatrixAR10jR11:5:2i3r11R13i-136gR14oR15R16R17i1689R18i1676gR19r386ghR14oR15R16R17i1690R18i1668gR19r39goR3jR4:8:2oR3jR4:2:1r74R14oR15R16R17i1700R18i1697gR19jR11:13:1aoR1aoR8R33R10r338gr82hR35r39ghgaoR3jR4:1:1r337R14oR15R16R17i1700R18i1697gR19r338goR3jR4:1:1oR6r38R8y13:filterMatrixBR10jR11:5:2i3r11R13i-137gR14oR15R16R17i1718R18i1705gR19r406ghR14oR15R16R17i1719R18i1697gR19r39goR3jR4:9:2oR3jR4:1:1r64R14oR15R16R17i1742R18i1726gR19r65gar171r172hR14oR15R16R17i1745R18i1726gR19jR11:5:2i2r11ghR14oR15R16R17i1751R18i1657gR19jR11:5:2i4r11gR14oR15R16R17i1751R18i1640gR19r363goR3jR4:5:3r7oR3jR4:9:2oR3jR4:1:1r362R14oR15R16R17i1800R18i1786gR19r363gar69r99hR14oR15R16R17i1803R18i1786gR19jR11:5:2i2r11goR3jR4:5:3r217oR3jR4:3:1oR3jR4:5:3r215oR3jR4:9:2oR3jR4:1:1r362R14oR15R16R17i1821R18i1807gR19r363gar69r99hR14oR15R16R17i1824R18i1807gR19jR11:5:2i2r11goR3jR4:9:2oR3jR4:1:1oR6r38R8y8:viewportR10jR11:5:2i4r11R13i-143gR14oR15R16R17i1835R18i1827gR19r447gar69r99hR14oR15R16R17i1838R18i1827gR19jR11:5:2i2r11gR14oR15R16R17i1838R18i1807gR19jR11:5:2i2r11gR14oR15R16R17i1839R18i1806gR19r456goR3jR4:9:2oR3jR4:1:1r446R14oR15R16R17i1850R18i1842gR19r447gar171r172hR14oR15R16R17i1853R18i1842gR19jR11:5:2i2r11gR14oR15R16R17i1853R18i1806gR19jR11:5:2i2r11gR14oR15R16R17i1853R18i1786gR19r432goR3jR4:10:3oR3jR4:1:1oR6r38R8y10:pixelAlignR10r54R29ajR30:0:1nhR13i-141gR14oR15R16R17i1959R18i1949gR19r54goR3jR4:5:3jR5:20:1jR5:3:0oR3jR4:9:2oR3jR4:1:1r362R14oR15R16R17i1976R18i1962gR19r363gar69r99hR14oR15R16R17i1979R18i1962gR19jR11:5:2i2r11goR3jR4:1:1oR6r38R8y16:halfPixelInverseR10jR11:5:2i2r11R13i-142gR14oR15R16R17i1999R18i1983gR19r492gR14oR15R16R17i1999R18i1962gR19r489gnR14oR15R16R17i1999R18i1945gR19r188goR3jR4:5:3r7oR3jR4:1:1oR6jR7:5:0R8R21R10jR11:5:2i4r11R22oR6r502R8y6:outputR10jR11:12:1ar501oR6r502R8R25R10jR11:5:2i4r11R22r504R13i-123ghR13i-121gR13i-122gR14oR15R16R17i2020R18i2005gR19r503goR3jR4:1:1r362R14oR15R16R17i2037R18i2023gR19r363gR14oR15R16R17i2037R18i2005gR19r503ghR14oR15R16R17i2043R18i1531gR19r188gR6jR44:0:0R45oR6r327R8y6:vertexR10jR11:13:1aoR1ahR35r188ghR13i-146gR35r188goR1ahR2oR3jR4:4:1aoR3jR4:10:3oR3jR4:5:3jR5:14:0oR3jR4:1:1oR6r38R8y9:killAlphaR10r54R29ajR30:0:1nhR13i-140gR14oR15R16R17i2088R18i2079gR19r54goR3jR4:5:3jR5:9:0oR3jR4:9:2oR3jR4:1:1r254R14oR15R16R17i2102R18i2092gR19r255gar172hR14oR15R16R17i2104R18i2092gR19r39goR3jR4:0:1jR27:3:1d0.001R14oR15R16R17i2112R18i2107gR19r39gR14oR15R16R17i2112R18i2092gR19r54gR14oR15R16R17i2112R18i2079gR19r54goR3jR4:11:0R14oR15R16R17i2122R18i2115gR19r188gnR14oR15R16R17i2122R18i2075gR19r188goR3jR4:5:3r7oR3jR4:1:1r506R14oR15R16R17i2140R18i2128gR19r507goR3jR4:1:1r254R14oR15R16R17i2153R18i2143gR19r255gR14oR15R16R17i2153R18i2128gR19r507ghR14oR15R16R17i2159R18i2069gR19r188gR6jR44:1:0R45oR6r327R8y8:fragmentR10jR11:13:1aoR1ahR35r188ghR13i-147gR35r188ghR8y17:h3d.shader.Base2dy4:varsar202r519r37r110r209r326r64r571r303r474r491r283r223r9r362r504r53r157r27r264r532oR6jR7:0:0R8y4:timeR10r39R13i-124gr385r254r405r446hg";
 h3d_shader_BaseMesh.SRC = "oy4:funsaoy4:argsahy4:exproy1:ejy13:hxsl.TExprDef:4:1aoR3jR4:5:3jy16:haxe.macro.Binop:4:0oR3jR4:1:1oy4:kindjy12:hxsl.VarKind:4:0y4:namey16:relativePositiony4:typejy9:hxsl.Type:5:2i3jy12:hxsl.VecType:1:0y2:idi-66gy1:poy4:filey99:D%3A%5CNeelts%5CPrograms%5CDev%5CHaxe%5Chaxe%5Clib%5Cheaps%2F0%2C9%2C0%2Fh3d%2Fshader%2FBaseMesh.hxy3:maxi1268y3:mini1252gy1:tr12goR3jR4:1:1oR6jR7:1:0R8y8:positionR10jR11:5:2i3r11y6:parentoR6r17R8y5:inputR10jR11:12:1ar16oR6r17R8y6:normalR10jR11:5:2i3r11R21r19R13i-60ghR13i-58gR13i-59gR14oR15R16R17i1285R18i1271gR19r18gR14oR15R16R17i1285R18i1252gR19r12goR3jR4:5:3r7oR3jR4:1:1oR6r10R8y19:transformedPositionR10jR11:5:2i3r11R13i-67gR14oR15R16R17i1310R18i1291gR19r31goR3jR4:5:3jR5:1:0oR3jR4:1:1r9R14oR15R16R17i1329R18i1313gR19r12goR3jR4:8:2oR3jR4:2:1jy12:hxsl.TGlobal:50:0R14oR15R16R17i1348R18i1332gR19jR11:13:1ahgaoR3jR4:1:1oR6jR7:0:0R8y9:modelViewR10jR11:7:0R21oR6r49R8y6:globalR10jR11:12:1aoR6r49R8y4:timeR10jR11:3:0R21r51R13i-54goR6r49R8y9:pixelSizeR10jR11:5:2i2r11R21r51R13i-55gr48oR6r49R8y16:modelViewInverseR10r50R21r51y10:qualifiersajy17:hxsl.VarQualifier:3:0hR13i-57ghR13i-53gR31ar59hR13i-56gR14oR15R16R17i1348R18i1332gR19r50ghR14oR15R16R17i1357R18i1332gR19jR11:8:0gR14oR15R16R17i1357R18i1313gR19jR11:5:2i3r11gR14oR15R16R17i1357R18i1291gR19r31goR3jR4:5:3r7oR3jR4:1:1oR6r10R8y17:projectedPositionR10jR11:5:2i4r11R13i-70gR14oR15R16R17i1380R18i1363gR19r75goR3jR4:5:3r35oR3jR4:8:2oR3jR4:2:1jR25:40:0R14oR15R16R17i1387R18i1383gR19jR11:13:1ahgaoR3jR4:1:1r30R14oR15R16R17i1407R18i1388gR19r31goR3jR4:0:1jy10:hxsl.Const:3:1i1R14oR15R16R17i1410R18i1409gR19r54ghR14oR15R16R17i1411R18i1383gR19jR11:5:2i4r11goR3jR4:1:1oR6r49R8y8:viewProjR10r50R21oR6r49R8y6:cameraR10jR11:12:1aoR6r49R8y4:viewR10r50R21r99R13i-44goR6r49R8y4:projR10r50R21r99R13i-45goR6r49R8R20R10jR11:5:2i3r11R21r99R13i-46goR6r49R8y8:projDiagR10jR11:5:2i3r11R21r99R13i-47gr98oR6r49R8y15:inverseViewProjR10r50R21r99R13i-49goR6r49R8y5:zNearR10r54R21r99R13i-50goR6r49R8y4:zFarR10r54R21r99R13i-51goR6jR7:3:0R8y3:dirR10jR11:5:2i3r11R21r99R13i-52ghR13i-43gR13i-48gR14oR15R16R17i1429R18i1414gR19r50gR14oR15R16R17i1429R18i1383gR19jR11:5:2i4r11gR14oR15R16R17i1429R18i1363gR19r75goR3jR4:5:3r7oR3jR4:1:1oR6r10R8y17:transformedNormalR10jR11:5:2i3r11R13i-69gR14oR15R16R17i1452R18i1435gR19r124goR3jR4:8:2oR3jR4:2:1jR25:31:0R14oR15R16R17i1495R18i1455gR19jR11:13:1aoR1aoR8y1:_R10r69ghy3:retr69ghgaoR3jR4:3:1oR3jR4:5:3r35oR3jR4:1:1r21R14oR15R16R17i1468R18i1456gR19r22goR3jR4:8:2oR3jR4:2:1jR25:48:0R14oR15R16R17i1487R18i1471gR19jR11:13:1ahgaoR3jR4:1:1r48R14oR15R16R17i1487R18i1471gR19r50ghR14oR15R16R17i1494R18i1471gR19jR11:6:0gR14oR15R16R17i1494R18i1456gR19r69gR14oR15R16R17i1495R18i1455gR19r69ghR14oR15R16R17i1507R18i1455gR19r69gR14oR15R16R17i1507R18i1435gR19r124goR3jR4:5:3r7oR3jR4:1:1r110R14oR15R16R17i1523R18i1513gR19r112goR3jR4:8:2oR3jR4:2:1r129R14oR15R16R17i1565R18i1526gR19jR11:13:1aoR1aoR8R45R10jR11:5:2i3r11ghR46r69ghgaoR3jR4:3:1oR3jR4:5:3jR5:3:0oR3jR4:1:1r103R14oR15R16R17i1542R18i1527gR19r104goR3jR4:1:1r30R14oR15R16R17i1564R18i1545gR19r31gR14oR15R16R17i1564R18i1527gR19r177gR14oR15R16R17i1565R18i1526gR19r177ghR14oR15R16R17i1577R18i1526gR19r69gR14oR15R16R17i1577R18i1513gR19r112goR3jR4:5:3r7oR3jR4:1:1oR6r10R8y10:pixelColorR10jR11:5:2i4r11R13i-71gR14oR15R16R17i1593R18i1583gR19r200goR3jR4:1:1oR6jR7:2:0R8y5:colorR10jR11:5:2i4r11R13i-76gR14oR15R16R17i1601R18i1596gR19r206gR14oR15R16R17i1601R18i1583gR19r200goR3jR4:5:3r7oR3jR4:1:1oR6r10R8y9:specPowerR10r54R13i-74gR14oR15R16R17i1616R18i1607gR19r54goR3jR4:1:1oR6r205R8y13:specularPowerR10r54R31ajR32:7:2d0d100hR13i-77gR14oR15R16R17i1632R18i1619gR19r54gR14oR15R16R17i1632R18i1607gR19r54goR3jR4:5:3r7oR3jR4:1:1oR6r10R8y9:specColorR10jR11:5:2i3r11R13i-75gR14oR15R16R17i1647R18i1638gR19r227goR3jR4:5:3r35oR3jR4:1:1oR6r205R8y13:specularColorR10jR11:5:2i3r11R13i-79gR14oR15R16R17i1663R18i1650gR19r233goR3jR4:1:1oR6r205R8y14:specularAmountR10r54R31ajR32:7:2d0d10hR13i-78gR14oR15R16R17i1680R18i1666gR19r54gR14oR15R16R17i1680R18i1650gR19r233gR14oR15R16R17i1680R18i1638gR19r227goR3jR4:5:3r7oR3jR4:1:1oR6r10R8y8:screenUVR10jR11:5:2i2r11R13i-73gR14oR15R16R17i1694R18i1686gR19r249goR3jR4:5:3jR5:0:0oR3jR4:5:3r35oR3jR4:3:1oR3jR4:5:3jR5:2:0oR3jR4:9:2oR3jR4:1:1r74R14oR15R16R17i1715R18i1698gR19r75gajy14:hxsl.Component:0:0jR55:1:0hR14oR15R16R17i1718R18i1698gR19jR11:5:2i2r11goR3jR4:9:2oR3jR4:1:1r74R14oR15R16R17i1738R18i1721gR19r75gajR55:3:0hR14oR15R16R17i1740R18i1721gR19r54gR14oR15R16R17i1740R18i1698gR19r267gR14oR15R16R17i1741R18i1697gR19r267goR3jR4:8:2oR3jR4:2:1jR25:38:0R14oR15R16R17i1748R18i1744gR19jR11:13:1ahgaoR3jR4:0:1jR34:3:1d0.5R14oR15R16R17i1752R18i1749gR19r54goR3jR4:0:1jR34:3:1d-0.5R14oR15R16R17i1758R18i1754gR19r54ghR14oR15R16R17i1759R18i1744gR19jR11:5:2i2r11gR14oR15R16R17i1759R18i1697gR19jR11:5:2i2r11goR3jR4:0:1jR34:3:1d0.5R14oR15R16R17i1765R18i1762gR19r54gR14oR15R16R17i1765R18i1697gR19r301gR14oR15R16R17i1765R18i1686gR19r249goR3jR4:5:3r7oR3jR4:1:1oR6r10R8y5:depthR10r54R13i-72gR14oR15R16R17i1776R18i1771gR19r54goR3jR4:5:3r257oR3jR4:9:2oR3jR4:1:1r74R14oR15R16R17i1796R18i1779gR19r75gajR55:2:0hR14oR15R16R17i1798R18i1779gR19r54goR3jR4:9:2oR3jR4:1:1r74R14oR15R16R17i1818R18i1801gR19r75gar273hR14oR15R16R17i1820R18i1801gR19r54gR14oR15R16R17i1820R18i1779gR19r54gR14oR15R16R17i1820R18i1771gR19r54ghR14oR15R16R17i1826R18i1246gR19jR11:0:0gR6jy17:hxsl.FunctionKind:2:0y3:refoR6jR7:6:0R8y8:__init__R10jR11:13:1aoR1ahR46r337ghR13i-80gR46r337goR1ahR2oR3jR4:4:1aoR3jR4:5:3r7oR3jR4:1:1r123R14oR15R16R17i1883R18i1866gR19r124goR3jR4:8:2oR3jR4:2:1r129R14oR15R16R17i1903R18i1886gR19jR11:13:1aoR1aoR8R45R10r124ghR46r69ghgaoR3jR4:1:1r123R14oR15R16R17i1903R18i1886gR19r124ghR14oR15R16R17i1915R18i1886gR19r69gR14oR15R16R17i1915R18i1866gR19r124goR3jR4:5:3r7oR3jR4:1:1r248R14oR15R16R17i2024R18i2016gR19r249goR3jR4:5:3r253oR3jR4:5:3r35oR3jR4:3:1oR3jR4:5:3r257oR3jR4:9:2oR3jR4:1:1r74R14oR15R16R17i2045R18i2028gR19r75gar263r264hR14oR15R16R17i2048R18i2028gR19jR11:5:2i2r11goR3jR4:9:2oR3jR4:1:1r74R14oR15R16R17i2068R18i2051gR19r75gar273hR14oR15R16R17i2070R18i2051gR19r54gR14oR15R16R17i2070R18i2028gR19r385gR14oR15R16R17i2071R18i2027gR19r385goR3jR4:8:2oR3jR4:2:1r282R14oR15R16R17i2078R18i2074gR19r286gaoR3jR4:0:1jR34:3:1d0.5R14oR15R16R17i2082R18i2079gR19r54goR3jR4:0:1jR34:3:1d-0.5R14oR15R16R17i2088R18i2084gR19r54ghR14oR15R16R17i2089R18i2074gR19jR11:5:2i2r11gR14oR15R16R17i2089R18i2027gR19jR11:5:2i2r11goR3jR4:0:1jR34:3:1d0.5R14oR15R16R17i2095R18i2092gR19r54gR14oR15R16R17i2095R18i2027gR19r415gR14oR15R16R17i2095R18i2016gR19r249goR3jR4:5:3r7oR3jR4:1:1r312R14oR15R16R17i2106R18i2101gR19r54goR3jR4:5:3r257oR3jR4:9:2oR3jR4:1:1r74R14oR15R16R17i2126R18i2109gR19r75gar321hR14oR15R16R17i2128R18i2109gR19r54goR3jR4:9:2oR3jR4:1:1r74R14oR15R16R17i2148R18i2131gR19r75gar273hR14oR15R16R17i2150R18i2131gR19r54gR14oR15R16R17i2150R18i2109gR19r54gR14oR15R16R17i2150R18i2101gR19r54goR3jR4:5:3r7oR3jR4:1:1r213R14oR15R16R17i2243R18i2234gR19r54goR3jR4:1:1r217R14oR15R16R17i2259R18i2246gR19r54gR14oR15R16R17i2259R18i2234gR19r54goR3jR4:5:3r7oR3jR4:1:1r226R14oR15R16R17i2274R18i2265gR19r227goR3jR4:5:3r35oR3jR4:1:1r232R14oR15R16R17i2290R18i2277gR19r233goR3jR4:1:1r237R14oR15R16R17i2307R18i2293gR19r54gR14oR15R16R17i2307R18i2277gR19r233gR14oR15R16R17i2307R18i2265gR19r227ghR14oR15R16R17i2313R18i1860gR19r337gR6r338R58oR6r340R8y16:__init__fragmentR10jR11:13:1aoR1ahR46r337ghR13i-81gR46r337goR1ahR2oR3jR4:4:1aoR3jR4:5:3r7oR3jR4:1:1oR6jR7:5:0R8R20R10jR11:5:2i4r11R21oR6r485R8y6:outputR10jR11:12:1ar484oR6r485R8R48R10jR11:5:2i4r11R21r487R13i-63goR6r485R8R56R10jR11:5:2i4r11R21r487R13i-64goR6r485R8R23R10jR11:5:2i4r11R21r487R13i-65ghR13i-61gR13i-62gR14oR15R16R17i2358R18i2343gR19r486goR3jR4:1:1r74R14oR15R16R17i2378R18i2361gR19r75gR14oR15R16R17i2378R18i2343gR19r486goR3jR4:5:3r7oR3jR4:1:1oR6r10R8y24:pixelTransformedPositionR10jR11:5:2i3r11R13i-68gR14oR15R16R17i2408R18i2384gR19r506goR3jR4:1:1r30R14oR15R16R17i2430R18i2411gR19r31gR14oR15R16R17i2430R18i2384gR19r506ghR14oR15R16R17i2436R18i2337gR19r337gR6jR57:0:0R58oR6r340R8y6:vertexR10jR11:13:1aoR1ahR46r337ghR13i-82gR46r337goR1ahR2oR3jR4:4:1aoR3jR4:5:3r7oR3jR4:1:1r489R14oR15R16R17i2480R18i2468gR19r490goR3jR4:1:1r199R14oR15R16R17i2493R18i2483gR19r200gR14oR15R16R17i2493R18i2468gR19r490goR3jR4:5:3r7oR3jR4:1:1r491R14oR15R16R17i2511R18i2499gR19r492goR3jR4:8:2oR3jR4:2:1jR25:52:0R14oR15R16R17i2518R18i2514gR19jR11:13:1aoR1aoR8y5:valueR10r54ghR46jR11:5:2i4r11ghgaoR3jR4:1:1r312R14oR15R16R17i2524R18i2519gR19r54ghR14oR15R16R17i2525R18i2514gR19r548gR14oR15R16R17i2525R18i2499gR19r492goR3jR4:5:3r7oR3jR4:1:1r493R14oR15R16R17i2544R18i2531gR19r494goR3jR4:8:2oR3jR4:2:1jR25:54:0R14oR15R16R17i2557R18i2547gR19jR11:13:1aoR1aoR8R64R10jR11:5:2i3r11ghR46jR11:5:2i4r11ghgaoR3jR4:1:1r123R14oR15R16R17i2575R18i2558gR19r124ghR14oR15R16R17i2576R18i2547gR19r572gR14oR15R16R17i2576R18i2531gR19r494ghR14oR15R16R17i2582R18i2462gR19r337gR6jR57:1:0R58oR6r340R8y8:fragmentR10jR11:13:1aoR1ahR46r337ghR13i-83gR46r337ghR8y19:h3d.shader.BaseMeshy4:varsar74r312r517r123r237r226r232r339r585r217r473r9r99r487r248r51r19r30r204r213r505r199hg";
-h3d_shader_Blur.SRC = "oy4:funsaoy4:argsahy4:exproy1:ejy13:hxsl.TExprDef:4:1aoR3jR4:5:3jy16:haxe.macro.Binop:4:0oR3jR4:1:1oy4:kindjy12:hxsl.VarKind:5:0y4:namey8:positiony4:typejy9:hxsl.Type:5:2i4jy12:hxsl.VecType:1:0y6:parentoR6r10R8y6:outputR10jR11:12:1ar9oR6r10R8y5:colorR10jR11:5:2i4r11R13r13y2:idi-182ghR16i-180gR16i-181gy1:poy4:filey103:D%3A%5CNeelts%5CPrograms%5CDev%5CHaxe%5Chaxe%5Clib%5Cheaps%2F0%2C9%2C0%2Fh3d%2Fshader%2FScreenShader.hxy3:maxi262y3:mini247gy1:tr12goR3jR4:8:2oR3jR4:2:1jy12:hxsl.TGlobal:40:0R17oR18R19R20i269R21i265gR22jR11:13:1ahgaoR3jR4:1:1oR6jR7:1:0R8R9R10jR11:5:2i2r11R13oR6r30R8y5:inputR10jR11:12:1ar29oR6r30R8y2:uvR10jR11:5:2i2r11R13r32R16i-179ghR16i-177gR16i-178gR17oR18R19R20i284R21i270gR22r31goR3jR4:0:1jy10:hxsl.Const:3:1zR17oR18R19R20i287R21i286gR22jR11:3:0goR3jR4:0:1jR26:3:1i1R17oR18R19R20i290R21i289gR22r43ghR17oR18R19R20i291R21i265gR22jR11:5:2i4r11gR17oR18R19R20i291R21i247gR22r12ghR17oR18R19R20i297R21i241gR22jR11:0:0gR6jy17:hxsl.FunctionKind:0:0y3:refoR6jR7:6:0R8y6:vertexR10jR11:13:1aoR1ahy3:retr55ghR16i-196gR30r55goR1ahR2oR3jR4:4:1aoR3jR4:10:3oR3jR4:1:1oR6jR7:2:0R8y16:isDepthDependantR10jR11:2:0y10:qualifiersajy17:hxsl.VarQualifier:0:1nhR16i-193gR17oR18y95:D%3A%5CNeelts%5CPrograms%5CDev%5CHaxe%5Chaxe%5Clib%5Cheaps%2F0%2C9%2C0%2Fh3d%2Fshader%2FBlur.hxR20i638R21i622gR22r71goR3jR4:4:1aoR3jR4:7:2oR6jR7:4:0R8y4:pcurR10jR11:5:2i3r11R16i-200goR3jR4:8:2oR3jR4:1:1oR6r58R8y11:getPositionR10jR11:13:1aoR1aoR8R25R10jR11:5:2i2r11ghR30r81ghR16i-199gR17oR18R34R20i670R21i659gR22r90gaoR3jR4:1:1r34R17oR18R34R20i679R21i671gR22r35ghR17oR18R34R20i680R21i659gR22r81gR17oR18R34R20i681R21i648gR22r55goR3jR4:7:2oR6r80R8y4:ccurR10jR11:5:2i4r11R16i-201goR3jR4:8:2oR3jR4:2:1jR23:33:0R17oR18R34R20i705R21i698gR22jR11:13:1aoR1aoR8y1:_R10jR11:10:0goR8R25R10jR11:5:2i2r11ghR30r103ghgaoR3jR4:1:1oR6r70R8y7:textureR10r113R16i-184gR17oR18R34R20i705R21i698gR22r113goR3jR4:1:1r34R17oR18R34R20i718R21i710gR22r35ghR17oR18R34R20i719R21i698gR22r103gR17oR18R34R20i720R21i687gR22r55goR3jR4:7:2oR6r80R8R15R10jR11:5:2i4r11R16i-202goR3jR4:8:2oR3jR4:2:1r22R17oR18R34R20i742R21i738gR22r26gaoR3jR4:0:1jR26:3:1zR17oR18R34R20i744R21i743gR22r43goR3jR4:0:1jR26:3:1zR17oR18R34R20i747R21i746gR22r43goR3jR4:0:1jR26:3:1zR17oR18R34R20i750R21i749gR22r43goR3jR4:0:1jR26:3:1zR17oR18R34R20i753R21i752gR22r43ghR17oR18R34R20i754R21i738gR22r131gR17oR18R34R20i755R21i726gR22r55goR3jR4:7:2oR6r80R8y4:ncurR10jR11:5:2i3r11R16i-203goR3jR4:8:2oR3jR4:2:1jR23:55:0R17oR18R34R20i784R21i772gR22jR11:13:1aoR1aoR8y5:valueR10jR11:5:2i4r11ghR30r159ghgaoR3jR4:8:2oR3jR4:2:1r106R17oR18R34R20i798R21i785gR22jR11:13:1aoR1aoR8R38R10r113gr114hR30r103ghgaoR3jR4:1:1oR6r70R8y13:normalTextureR10r113R16i-195gR17oR18R34R20i798R21i785gR22r113goR3jR4:1:1r34R17oR18R34R20i811R21i803gR22r35ghR17oR18R34R20i812R21i785gR22r103ghR17oR18R34R20i813R21i772gR22r159gR17oR18R34R20i814R21i761gR22r55goR3jR4:20:3y6:unrollahoR3jR4:13:3oR6r80R8y1:iR10jR11:1:0R16i-204goR3jR4:5:3jR5:21:0oR3jR4:5:3jR5:0:0oR3jR4:6:2jy15:haxe.macro.Unop:3:0oR3jR4:1:1oR6r70R8y7:QualityR10r199R32ajR33:0:1nhR16i-186gR17oR18R34R20i846R21i839gR22r199gR17oR18R34R20i846R21i838gR22r199goR3jR4:0:1jR26:2:1i1R17oR18R34R20i853R21i849gR22r199gR17oR18R34R20i853R21i838gR22r199goR3jR4:1:1r207R17oR18R34R20i860R21i853gR22r199gR17oR18R34R20i860R21i838gR22jR11:14:2r199jy13:hxsl.SizeDecl:0:1zgoR3jR4:4:1aoR3jR4:7:2oR6r80R8R25R10jR11:5:2i2r11R16i-205goR3jR4:5:3r203oR3jR4:1:1r34R17oR18R34R20i888R21i880gR22r35goR3jR4:5:3jR5:1:0oR3jR4:1:1oR6r70R8y5:pixelR10jR11:5:2i2r11R16i-189gR17oR18R34R20i896R21i891gR22r240goR3jR4:8:2oR3jR4:2:1jR23:36:0R17oR18R34R20i904R21i899gR22jR11:13:1aoR1aoR8R41R10r199ghR30r43ghgaoR3jR4:1:1r198R17oR18R34R20i906R21i905gR22r199ghR17oR18R34R20i907R21i899gR22r43gR17oR18R34R20i907R21i891gR22r240gR17oR18R34R20i907R21i880gR22r231gR17oR18R34R20i908R21i871gR22r55goR3jR4:7:2oR6r80R8y1:cR10r103R16i-206goR3jR4:8:2oR3jR4:2:1r106R17oR18R34R20i930R21i923gR22jR11:13:1aoR1aoR8R38R10r113gr114hR30r103ghgaoR3jR4:1:1r119R17oR18R34R20i930R21i923gR22r113goR3jR4:1:1r230R17oR18R34R20i937R21i935gR22r231ghR17oR18R34R20i938R21i923gR22r103gR17oR18R34R20i939R21i915gR22r55goR3jR4:7:2oR6r80R8R17R10r81R16i-207goR3jR4:8:2oR3jR4:1:1r84R17oR18R34R20i965R21i954gR22r90gaoR3jR4:1:1r230R17oR18R34R20i968R21i966gR22r231ghR17oR18R34R20i969R21i954gR22r81gR17oR18R34R20i970R21i946gR22r55goR3jR4:7:2oR6r80R8y1:dR10r43R16i-208goR3jR4:8:2oR3jR4:2:1jR23:29:0R17oR18R34R20i995R21i985gR22jR11:13:1aoR1aoR8R38R10jR11:5:2i3r11goR8y1:bR10jR11:5:2i3r11ghR30r43ghgaoR3jR4:3:1oR3jR4:5:3jR5:3:0oR3jR4:1:1r288R17oR18R34R20i987R21i986gR22r81goR3jR4:1:1r79R17oR18R34R20i994R21i990gR22r81gR17oR18R34R20i994R21i986gR22r312gR17oR18R34R20i995R21i985gR22r312goR3jR4:5:3r319oR3jR4:1:1r288R17oR18R34R20i1001R21i1000gR22r81goR3jR4:1:1r79R17oR18R34R20i1008R21i1004gR22r81gR17oR18R34R20i1008R21i1000gR22jR11:5:2i3r11ghR17oR18R34R20i1009R21i985gR22r43gR17oR18R34R20i1010R21i977gR22r55goR3jR4:7:2oR6r80R8y1:nR10r159R16i-209goR3jR4:8:2oR3jR4:2:1r162R17oR18R34R20i1037R21i1025gR22r170gaoR3jR4:8:2oR3jR4:2:1r106R17oR18R34R20i1051R21i1038gR22jR11:13:1aoR1aoR8R38R10r113gr114hR30r103ghgaoR3jR4:1:1r183R17oR18R34R20i1051R21i1038gR22r113goR3jR4:1:1r230R17oR18R34R20i1058R21i1056gR22r231ghR17oR18R34R20i1059R21i1038gR22r103ghR17oR18R34R20i1060R21i1025gR22r159gR17oR18R34R20i1061R21i1017gR22r55goR3jR4:5:3r7oR3jR4:1:1r266R17oR18R34R20i1071R21i1070gR22r103goR3jR4:8:2oR3jR4:2:1jR23:24:0R17oR18R34R20i1077R21i1074gR22jR11:13:1aoR1aoR8y1:xR10r103goR8y1:yR10r103goR8y1:aR10r43ghR30r103ghgaoR3jR4:1:1r102R17oR18R34R20i1082R21i1078gR22r103goR3jR4:1:1r266R17oR18R34R20i1085R21i1084gR22r103goR3jR4:8:2oR3jR4:2:1r305R17oR18R34R20i1091R21i1087gR22jR11:13:1aoR1aoR8R38R10r159gr313hR30r43ghgaoR3jR4:1:1r158R17oR18R34R20i1091R21i1087gR22r159goR3jR4:1:1r345R17oR18R34R20i1097R21i1096gR22r159ghR17oR18R34R20i1098R21i1087gR22r43ghR17oR18R34R20i1099R21i1074gR22r103gR17oR18R34R20i1099R21i1070gR22r103goR3jR4:5:3r7oR3jR4:1:1r266R17oR18R34R20i1108R21i1107gR22r103goR3jR4:8:2oR3jR4:2:1r379R17oR18R34R20i1114R21i1111gR22jR11:13:1ar383hgaoR3jR4:1:1r266R17oR18R34R20i1116R21i1115gR22r103goR3jR4:1:1r102R17oR18R34R20i1122R21i1118gR22r103goR3jR4:8:2oR3jR4:2:1jR23:21:0R17oR18R34R20i1154R21i1124gR22jR11:13:1aoR1aoR8R38R10r43goR8R51R10r43ghR30r43ghgaoR3jR4:3:1oR3jR4:5:3r237oR3jR4:8:2oR3jR4:2:1jR23:22:0R17oR18R34R20i1136R21i1125gR22jR11:13:1aoR1aoR8R38R10r43gr444hR30r43ghgaoR3jR4:3:1oR3jR4:5:3r319oR3jR4:1:1r302R17oR18R34R20i1127R21i1126gR22r43goR3jR4:0:1jR26:3:1d0.001R17oR18R34R20i1135R21i1130gR22r43gR17oR18R34R20i1135R21i1126gR22r43gR17oR18R34R20i1136R21i1125gR22r43goR3jR4:0:1jR26:3:1d0R17oR18R34R20i1143R21i1141gR22r43ghR17oR18R34R20i1144R21i1125gR22r43goR3jR4:0:1jR26:3:1i100000R17oR18R34R20i1153R21i1147gR22r43gR17oR18R34R20i1153R21i1125gR22r43gR17oR18R34R20i1154R21i1124gR22r43goR3jR4:0:1jR26:3:1d1R17oR18R34R20i1161R21i1159gR22r43ghR17oR18R34R20i1162R21i1124gR22r43ghR17oR18R34R20i1163R21i1111gR22r103gR17oR18R34R20i1163R21i1107gR22r103goR3jR4:5:3jR5:20:1r203oR3jR4:1:1r130R17oR18R34R20i1176R21i1171gR22r131goR3jR4:5:3r237oR3jR4:1:1r266R17oR18R34R20i1181R21i1180gR22r103goR3jR4:16:2oR3jR4:1:1oR6r70R8y6:valuesR10jR11:14:2r43jR47:1:1r207R16i-188gR17oR18R34R20i1190R21i1184gR22r510goR3jR4:10:3oR3jR4:5:3jR5:9:0oR3jR4:1:1r198R17oR18R34R20i1192R21i1191gR22r199goR3jR4:0:1jR26:2:1zR17oR18R34R20i1196R21i1195gR22r199gR17oR18R34R20i1196R21i1191gR22r71goR3jR4:6:2r205oR3jR4:1:1r198R17oR18R34R20i1201R21i1200gR22r199gR17oR18R34R20i1201R21i1199gR22r199goR3jR4:1:1r198R17oR18R34R20i1205R21i1204gR22r199gR17oR18R34R20i1205R21i1191gR22r199gR17oR18R34R20i1206R21i1184gR22r43gR17oR18R34R20i1206R21i1180gR22r103gR17oR18R34R20i1206R21i1171gR22r131ghR17oR18R34R20i1214R21i863gR22r55gR17oR18R34R20i1214R21i828gR22r55gR17oR18R34R20i1214R21i821gR22r55goR3jR4:5:3r7oR3jR4:1:1r15R17oR18R34R20i1232R21i1220gR22r16goR3jR4:1:1r130R17oR18R34R20i1240R21i1235gR22r131gR17oR18R34R20i1240R21i1220gR22r16ghR17oR18R34R20i1247R21i641gR22r55goR3jR4:10:3oR3jR4:1:1oR6r70R8y7:isDepthR10r71R32ajR33:0:1nhR16i-187gR17oR18R34R20i1268R21i1261gR22r71goR3jR4:4:1aoR3jR4:7:2oR6r80R8y3:valR10r43R16i-210goR3jR4:0:1jR26:3:1d0R17oR18R34R20i1290R21i1288gR22r43gR17oR18R34R20i1291R21i1278gR22r55goR3jR4:20:3R43ahoR3jR4:13:3oR6r80R8R44R10r199R16i-211goR3jR4:5:3r201oR3jR4:5:3r203oR3jR4:6:2r205oR3jR4:1:1r207R17oR18R34R20i1323R21i1316gR22r199gR17oR18R34R20i1323R21i1315gR22r199goR3jR4:0:1jR26:2:1i1R17oR18R34R20i1330R21i1326gR22r199gR17oR18R34R20i1330R21i1315gR22r199goR3jR4:1:1r207R17oR18R34R20i1337R21i1330gR22r199gR17oR18R34R20i1337R21i1315gR22jR11:14:2r199jR47:0:1zgoR3jR4:5:3jR5:20:1r203oR3jR4:1:1r569R17oR18R34R20i1349R21i1346gR22r43goR3jR4:5:3r237oR3jR4:8:2oR3jR4:2:1jR23:53:0R17oR18R34R20i1359R21i1353gR22jR11:13:1aoR1aoR8R41R10jR11:5:2i4r11ghR30r43ghgaoR3jR4:8:2oR3jR4:2:1r106R17oR18R34R20i1367R21i1360gR22jR11:13:1aoR1aoR8R38R10r113gr114hR30r103ghgaoR3jR4:1:1r119R17oR18R34R20i1367R21i1360gR22r113goR3jR4:5:3r203oR3jR4:1:1r34R17oR18R34R20i1380R21i1372gR22r35goR3jR4:5:3r237oR3jR4:1:1r239R17oR18R34R20i1388R21i1383gR22r240goR3jR4:8:2oR3jR4:2:1r245R17oR18R34R20i1396R21i1391gR22jR11:13:1ar249hgaoR3jR4:1:1r579R17oR18R34R20i1398R21i1397gR22r199ghR17oR18R34R20i1399R21i1391gR22r43gR17oR18R34R20i1399R21i1383gR22r240gR17oR18R34R20i1399R21i1372gR22jR11:5:2i2r11ghR17oR18R34R20i1400R21i1360gR22r103ghR17oR18R34R20i1401R21i1353gR22r43goR3jR4:16:2oR3jR4:1:1r508R17oR18R34R20i1410R21i1404gR22r510goR3jR4:10:3oR3jR4:5:3r515oR3jR4:1:1r579R17oR18R34R20i1412R21i1411gR22r199goR3jR4:0:1jR26:2:1zR17oR18R34R20i1416R21i1415gR22r199gR17oR18R34R20i1416R21i1411gR22r71goR3jR4:6:2r205oR3jR4:1:1r579R17oR18R34R20i1421R21i1420gR22r199gR17oR18R34R20i1421R21i1419gR22r199goR3jR4:1:1r579R17oR18R34R20i1425R21i1424gR22r199gR17oR18R34R20i1425R21i1411gR22r199gR17oR18R34R20i1426R21i1404gR22r43gR17oR18R34R20i1426R21i1353gR22r43gR17oR18R34R20i1426R21i1346gR22r43gR17oR18R34R20i1426R21i1305gR22r55gR17oR18R34R20i1426R21i1298gR22r55goR3jR4:5:3r7oR3jR4:1:1r15R17oR18R34R20i1445R21i1433gR22r16goR3jR4:8:2oR3jR4:2:1jR23:52:0R17oR18R34R20i1452R21i1448gR22jR11:13:1aoR1aoR8R41R10r43ghR30jR11:5:2i4r11ghgaoR3jR4:8:2oR3jR4:2:1r437R17oR18R34R20i1456R21i1453gR22jR11:13:1aoR1aoR8R38R10r43gr444hR30r43ghgaoR3jR4:1:1r569R17oR18R34R20i1456R21i1453gR22r43goR3jR4:0:1jR26:3:1d0.9999999R17oR18R34R20i1470R21i1461gR22r43ghR17oR18R34R20i1471R21i1453gR22r43ghR17oR18R34R20i1472R21i1448gR22r710gR17oR18R34R20i1472R21i1433gR22r16ghR17oR18R34R20i1479R21i1271gR22r55goR3jR4:4:1aoR3jR4:7:2oR6r80R8R15R10jR11:5:2i4r11R16i-212goR3jR4:8:2oR3jR4:2:1r22R17oR18R34R20i1508R21i1504gR22r26gaoR3jR4:0:1jR26:3:1zR17oR18R34R20i1510R21i1509gR22r43goR3jR4:0:1jR26:3:1zR17oR18R34R20i1513R21i1512gR22r43goR3jR4:0:1jR26:3:1zR17oR18R34R20i1516R21i1515gR22r43goR3jR4:0:1jR26:3:1zR17oR18R34R20i1519R21i1518gR22r43ghR17oR18R34R20i1520R21i1504gR22r742gR17oR18R34R20i1521R21i1492gR22r55goR3jR4:20:3R43ahoR3jR4:13:3oR6r80R8R44R10r199R16i-213goR3jR4:5:3r201oR3jR4:5:3r203oR3jR4:6:2r205oR3jR4:1:1r207R17oR18R34R20i1553R21i1546gR22r199gR17oR18R34R20i1553R21i1545gR22r199goR3jR4:0:1jR26:2:1i1R17oR18R34R20i1560R21i1556gR22r199gR17oR18R34R20i1560R21i1545gR22r199goR3jR4:1:1r207R17oR18R34R20i1567R21i1560gR22r199gR17oR18R34R20i1567R21i1545gR22jR11:14:2r199jR47:0:1zgoR3jR4:5:3jR5:20:1r203oR3jR4:1:1r741R17oR18R34R20i1581R21i1576gR22r742goR3jR4:5:3r237oR3jR4:8:2oR3jR4:2:1r106R17oR18R34R20i1592R21i1585gR22jR11:13:1aoR1aoR8R38R10r113gr114hR30r103ghgaoR3jR4:1:1r119R17oR18R34R20i1592R21i1585gR22r113goR3jR4:5:3r203oR3jR4:1:1r34R17oR18R34R20i1605R21i1597gR22r35goR3jR4:5:3r237oR3jR4:1:1r239R17oR18R34R20i1613R21i1608gR22r240goR3jR4:8:2oR3jR4:2:1r245R17oR18R34R20i1621R21i1616gR22jR11:13:1ar249hgaoR3jR4:1:1r771R17oR18R34R20i1623R21i1622gR22r199ghR17oR18R34R20i1624R21i1616gR22r43gR17oR18R34R20i1624R21i1608gR22r240gR17oR18R34R20i1624R21i1597gR22jR11:5:2i2r11ghR17oR18R34R20i1625R21i1585gR22r103goR3jR4:16:2oR3jR4:1:1r508R17oR18R34R20i1634R21i1628gR22r510goR3jR4:10:3oR3jR4:5:3r515oR3jR4:1:1r771R17oR18R34R20i1636R21i1635gR22r199goR3jR4:0:1jR26:2:1zR17oR18R34R20i1640R21i1639gR22r199gR17oR18R34R20i1640R21i1635gR22r71goR3jR4:6:2r205oR3jR4:1:1r771R17oR18R34R20i1645R21i1644gR22r199gR17oR18R34R20i1645R21i1643gR22r199goR3jR4:1:1r771R17oR18R34R20i1649R21i1648gR22r199gR17oR18R34R20i1649R21i1635gR22r199gR17oR18R34R20i1650R21i1628gR22r43gR17oR18R34R20i1650R21i1585gR22r103gR17oR18R34R20i1650R21i1576gR22r742gR17oR18R34R20i1650R21i1535gR22r55gR17oR18R34R20i1650R21i1528gR22r55goR3jR4:5:3r7oR3jR4:1:1r15R17oR18R34R20i1669R21i1657gR22r16goR3jR4:1:1r741R17oR18R34R20i1677R21i1672gR22r742gR17oR18R34R20i1677R21i1657gR22r16ghR17oR18R34R20i1684R21i1485gR22r55gR17oR18R34R20i1684R21i1257gR22r55gR17oR18R34R20i1684R21i618gR22r55goR3jR4:10:3oR3jR4:1:1oR6r70R8y13:hasFixedColorR10r71R32ajR33:0:1nhR16i-190gR17oR18R34R20i1706R21i1693gR22r71goR3jR4:4:1aoR3jR4:5:3r7oR3jR4:9:2oR3jR4:1:1r15R17oR18R34R20i1728R21i1716gR22r16gajy14:hxsl.Component:0:0jR60:1:0jR60:2:0hR17oR18R34R20i1732R21i1716gR22jR11:5:2i3r11goR3jR4:9:2oR3jR4:1:1oR6r70R8y10:fixedColorR10jR11:5:2i4r11R16i-192gR17oR18R34R20i1745R21i1735gR22r914gar905r906r907hR17oR18R34R20i1749R21i1735gR22jR11:5:2i3r11gR17oR18R34R20i1749R21i1716gR22r910goR3jR4:10:3oR3jR4:1:1oR6r70R8y16:smoothFixedColorR10r71R32ajR33:0:1nhR16i-191gR17oR18R34R20i1776R21i1760gR22r71goR3jR4:5:3jR5:20:1r237oR3jR4:9:2oR3jR4:1:1r15R17oR18R34R20i1797R21i1785gR22r16gajR60:3:0hR17oR18R34R20i1799R21i1785gR22r43goR3jR4:9:2oR3jR4:1:1r913R17oR18R34R20i1813R21i1803gR22r914gar937hR17oR18R34R20i1815R21i1803gR22r43gR17oR18R34R20i1815R21i1785gR22r43goR3jR4:5:3r7oR3jR4:9:2oR3jR4:1:1r15R17oR18R34R20i1845R21i1833gR22r16gar937hR17oR18R34R20i1847R21i1833gR22r43goR3jR4:5:3r237oR3jR4:9:2oR3jR4:1:1r913R17oR18R34R20i1860R21i1850gR22r914gar937hR17oR18R34R20i1862R21i1850gR22r43goR3jR4:8:2oR3jR4:2:1r245R17oR18R34R20i1870R21i1865gR22jR11:13:1aoR1aoR8R41R10r71ghR30r43ghgaoR3jR4:5:3jR5:7:0oR3jR4:9:2oR3jR4:1:1r15R17oR18R34R20i1883R21i1871gR22r16gar937hR17oR18R34R20i1885R21i1871gR22r43goR3jR4:0:1jR26:3:1zR17oR18R34R20i1889R21i1888gR22r43gR17oR18R34R20i1889R21i1871gR22r71ghR17oR18R34R20i1890R21i1865gR22r43gR17oR18R34R20i1890R21i1850gR22r43gR17oR18R34R20i1890R21i1833gR22r43gR17oR18R34R20i1890R21i1756gR22r55ghR17oR18R34R20i1897R21i1709gR22r55gnR17oR18R34R20i1897R21i1689gR22r55ghR17oR18R34R20i1902R21i612gR22r55gR6jR27:1:0R28oR6r58R8y8:fragmentR10jR11:13:1aoR1ahR30r55ghR16i-197gR30r55goR1aoR6r80R8R25R10r89R16i-198ghR2oR3jR4:4:1aoR3jR4:7:2oR6r80R8y5:depthR10r43R16i-214goR3jR4:8:2oR3jR4:2:1r609R17oR18R34R20i1973R21i1967gR22r617gaoR3jR4:8:2oR3jR4:2:1r106R17oR18R34R20i1986R21i1974gR22jR11:13:1aoR1aoR8R38R10r113gr114hR30r103ghgaoR3jR4:1:1oR6r70R8y12:depthTextureR10r113R16i-185gR17oR18R34R20i1986R21i1974gR22r113goR3jR4:1:1r1012R17oR18R34R20i1993R21i1991gR22r89ghR17oR18R34R20i1994R21i1974gR22r103ghR17oR18R34R20i1995R21i1967gR22r43gR17oR18R34R20i1996R21i1955gR22r55goR3jR4:7:2oR6r80R8y3:uv2R10jR11:5:2i2r11R16i-215goR3jR4:5:3r237oR3jR4:3:1oR3jR4:5:3r319oR3jR4:1:1r1012R17oR18R34R20i2014R21i2012gR22r89goR3jR4:0:1jR26:3:1d0.5R17oR18R34R20i2020R21i2017gR22r43gR17oR18R34R20i2020R21i2012gR22r89gR17oR18R34R20i2021R21i2011gR22r89goR3jR4:8:2oR3jR4:2:1jR23:38:0R17oR18R34R20i2028R21i2024gR22jR11:13:1ahgaoR3jR4:0:1jR26:3:1i2R17oR18R34R20i2030R21i2029gR22r43goR3jR4:0:1jR26:3:1i-2R17oR18R34R20i2034R21i2032gR22r43ghR17oR18R34R20i2035R21i2024gR22jR11:5:2i2r11gR17oR18R34R20i2035R21i2011gR22r1047gR17oR18R34R20i2036R21i2001gR22r55goR3jR4:7:2oR6r80R8y4:tempR10r103R16i-216goR3jR4:5:3r237oR3jR4:8:2oR3jR4:2:1r22R17oR18R34R20i2056R21i2052gR22r26gaoR3jR4:1:1r1046R17oR18R34R20i2060R21i2057gR22r1047goR3jR4:1:1r1016R17oR18R34R20i2067R21i2062gR22r43goR3jR4:0:1jR26:3:1i1R17oR18R34R20i2070R21i2069gR22r43ghR17oR18R34R20i2071R21i2052gR22jR11:5:2i4r11goR3jR4:1:1oR6r70R8y21:cameraInverseViewProjR10jR11:7:0R16i-183gR17oR18R34R20i2095R21i2074gR22r1108gR17oR18R34R20i2095R21i2052gR22r103gR17oR18R34R20i2096R21i2041gR22r55goR3jR4:7:2oR6r80R8y8:originWSR10jR11:5:2i3r11R16i-217goR3jR4:5:3jR5:2:0oR3jR4:9:2oR3jR4:1:1r1086R17oR18R34R20i2120R21i2116gR22r103gar905r906r907hR17oR18R34R20i2124R21i2116gR22r1117goR3jR4:9:2oR3jR4:1:1r1086R17oR18R34R20i2131R21i2127gR22r103gar937hR17oR18R34R20i2133R21i2127gR22r43gR17oR18R34R20i2133R21i2116gR22r1117gR17oR18R34R20i2134R21i2101gR22r55goR3jR4:12:1oR3jR4:1:1r1116R17oR18R34R20i2154R21i2146gR22r1117gR17oR18R34R20i2154R21i2139gR22r55ghR17oR18R34R20i2160R21i1949gR22r55gR6jR27:3:0R28r84R30r81ghR8y15:h3d.shader.Blury4:varsar57r207r239r892r913r508r1005r84r119r561r183r69r13r32oR6r70R8y9:hasNormalR10r71R32ajR33:0:1nhR16i-194gr1107r1033r925hg";
-h3d_shader_ColorAdd.SRC = "oy4:funsaoy4:argsahy4:exproy1:ejy13:hxsl.TExprDef:4:1aoR3jR4:5:3jy16:haxe.macro.Binop:20:1jR5:0:0oR3jR4:9:2oR3jR4:1:1oy4:kindjy12:hxsl.VarKind:4:0y4:namey10:pixelColory4:typejy9:hxsl.Type:5:2i4jy12:hxsl.VecType:1:0y2:idi-298gy1:poy4:filey99:D%3A%5CNeelts%5CPrograms%5CDev%5CHaxe%5Chaxe%5Clib%5Cheaps%2F0%2C9%2C0%2Fh3d%2Fshader%2FColorAdd.hxy3:maxi180y3:mini170gy1:tr14gajy14:hxsl.Component:0:0jR20:1:0jR20:2:0hR14oR15R16R17i184R18i170gR19jR11:5:2i3r13goR3jR4:1:1oR6jR7:2:0R8y5:colorR10jR11:5:2i3r13R13i-299gR14oR15R16R17i193R18i188gR19r27gR14oR15R16R17i193R18i170gR19r23ghR14oR15R16R17i199R18i164gR19jR11:0:0gR6jy17:hxsl.FunctionKind:1:0y3:refoR6jR7:6:0R8y8:fragmentR10jR11:13:1aoR1ahy3:retr34ghR13i-300gR25r34ghR8y19:h3d.shader.ColorAddy4:varsar36r25r11hg";
-h3d_shader_ColorKey.SRC = "oy4:funsaoy4:argsahy4:exproy1:ejy13:hxsl.TExprDef:4:1aoR3jR4:7:2oy4:kindjy12:hxsl.VarKind:4:0y4:namey5:cdiffy4:typejy9:hxsl.Type:5:2i4jy12:hxsl.VecType:1:0y2:idi-304goR3jR4:5:3jy16:haxe.macro.Binop:3:0oR3jR4:1:1oR5r8R7y12:textureColorR9jR10:5:2i4r9R12i-302gy1:poy4:filey99:D%3A%5CNeelts%5CPrograms%5CDev%5CHaxe%5Chaxe%5Clib%5Cheaps%2F0%2C9%2C0%2Fh3d%2Fshader%2FColorKey.hxy3:maxi197y3:mini185gy1:tr15goR3jR4:1:1oR5jR6:2:0R7y8:colorKeyR9jR10:5:2i4r9R12i-301gR15oR16R17R18i208R19i200gR20r21gR15oR16R17R18i208R19i185gR20r10gR15oR16R17R18i209R19i173gR20jR10:0:0goR3jR4:10:3oR3jR4:5:3jR13:9:0oR3jR4:8:2oR3jR4:2:1jy12:hxsl.TGlobal:29:0R15oR16R17R18i223R19i218gR20jR10:13:1aoR1aoR7y1:_R9r10goR7y1:bR9jR10:5:2i4r9ghy3:retjR10:3:0ghgaoR3jR4:1:1r7R15oR16R17R18i223R19i218gR20r10goR3jR4:1:1r7R15oR16R17R18i233R19i228gR20r10ghR15oR16R17R18i234R19i218gR20r43goR3jR4:0:1jy10:hxsl.Const:3:1d1e-005R15oR16R17R18i244R19i237gR20r43gR15oR16R17R18i244R19i218gR20jR10:2:0goR3jR4:11:0R15oR16R17R18i254R19i247gR20r28gnR15oR16R17R18i254R19i214gR20r28ghR15oR16R17R18i260R19i167gR20r28gR5jy17:hxsl.FunctionKind:1:0y3:refoR5jR6:6:0R7y8:fragmentR9jR10:13:1aoR1ahR25r28ghR12i-303gR25r28ghR7y19:h3d.shader.ColorKeyy4:varsar69r19r14hg";
-h3d_shader_ColorMatrix.SRC = "oy4:funsaoy4:argsahy4:exproy1:ejy13:hxsl.TExprDef:4:1aoR3jR4:5:3jy16:haxe.macro.Binop:4:0oR3jR4:1:1oy4:kindjy12:hxsl.VarKind:4:0y4:namey10:pixelColory4:typejy9:hxsl.Type:5:2i4jy12:hxsl.VecType:1:0y2:idi-305gy1:poy4:filey102:D%3A%5CNeelts%5CPrograms%5CDev%5CHaxe%5Chaxe%5Clib%5Cheaps%2F0%2C9%2C0%2Fh3d%2Fshader%2FColorMatrix.hxy3:maxi184y3:mini174gy1:tr12goR3jR4:8:2oR3jR4:2:1jy12:hxsl.TGlobal:40:0R14oR15R16R17i191R18i187gR19jR11:13:1ahgaoR3jR4:9:2oR3jR4:3:1oR3jR4:5:3jR5:1:0oR3jR4:8:2oR3jR4:2:1r17R14oR15R16R17i198R18i194gR19r21gaoR3jR4:9:2oR3jR4:1:1r9R14oR15R16R17i209R18i199gR19r12gajy14:hxsl.Component:0:0jR21:1:0jR21:2:0hR14oR15R16R17i213R18i199gR19jR11:5:2i3r11goR3jR4:0:1jy10:hxsl.Const:3:1d1R14oR15R16R17i216R18i214gR19jR11:3:0ghR14oR15R16R17i217R18i194gR19jR11:5:2i4r11goR3jR4:1:1oR6jR7:2:0R8y6:matrixR10jR11:7:0R13i-306gR14oR15R16R17i226R18i220gR19r54gR14oR15R16R17i226R18i194gR19jR11:5:2i4r11gR14oR15R16R17i227R18i193gR19r59gar37r38r39hR14oR15R16R17i231R18i193gR19jR11:5:2i3r11goR3jR4:9:2oR3jR4:3:1oR3jR4:5:3r26oR3jR4:1:1r9R14oR15R16R17i244R18i234gR19r12goR3jR4:1:1r52R14oR15R16R17i253R18i247gR19r54gR14oR15R16R17i253R18i234gR19r59gR14oR15R16R17i254R18i233gR19r59gajR21:3:0hR14oR15R16R17i256R18i233gR19r47ghR14oR15R16R17i257R18i187gR19jR11:5:2i4r11gR14oR15R16R17i257R18i174gR19r12ghR14oR15R16R17i263R18i168gR19jR11:0:0gR6jy17:hxsl.FunctionKind:1:0y3:refoR6jR7:6:0R8y8:fragmentR10jR11:13:1aoR1ahy3:retr90ghR13i-307gR27r90ghR8y22:h3d.shader.ColorMatrixy4:varsar92r52r9hg";
+h3d_shader_Blur.SRC = "oy4:funsaoy4:argsahy4:exproy1:ejy13:hxsl.TExprDef:4:1aoR3jR4:5:3jy16:haxe.macro.Binop:4:0oR3jR4:1:1oy4:kindjy12:hxsl.VarKind:5:0y4:namey8:positiony4:typejy9:hxsl.Type:5:2i4jy12:hxsl.VecType:1:0y6:parentoR6r10R8y6:outputR10jR11:12:1ar9oR6r10R8y5:colorR10jR11:5:2i4r11R13r13y2:idi-252ghR16i-250gR16i-251gy1:poy4:filey103:D%3A%5CNeelts%5CPrograms%5CDev%5CHaxe%5Chaxe%5Clib%5Cheaps%2F0%2C9%2C0%2Fh3d%2Fshader%2FScreenShader.hxy3:maxi262y3:mini247gy1:tr12goR3jR4:8:2oR3jR4:2:1jy12:hxsl.TGlobal:40:0R17oR18R19R20i269R21i265gR22jR11:13:1ahgaoR3jR4:1:1oR6jR7:1:0R8R9R10jR11:5:2i2r11R13oR6r30R8y5:inputR10jR11:12:1ar29oR6r30R8y2:uvR10jR11:5:2i2r11R13r32R16i-249ghR16i-247gR16i-248gR17oR18R19R20i284R21i270gR22r31goR3jR4:0:1jy10:hxsl.Const:3:1zR17oR18R19R20i287R21i286gR22jR11:3:0goR3jR4:0:1jR26:3:1i1R17oR18R19R20i290R21i289gR22r43ghR17oR18R19R20i291R21i265gR22jR11:5:2i4r11gR17oR18R19R20i291R21i247gR22r12ghR17oR18R19R20i297R21i241gR22jR11:0:0gR6jy17:hxsl.FunctionKind:0:0y3:refoR6jR7:6:0R8y6:vertexR10jR11:13:1aoR1ahy3:retr55ghR16i-266gR30r55goR1ahR2oR3jR4:4:1aoR3jR4:10:3oR3jR4:1:1oR6jR7:2:0R8y16:isDepthDependantR10jR11:2:0y10:qualifiersajy17:hxsl.VarQualifier:0:1nhR16i-263gR17oR18y95:D%3A%5CNeelts%5CPrograms%5CDev%5CHaxe%5Chaxe%5Clib%5Cheaps%2F0%2C9%2C0%2Fh3d%2Fshader%2FBlur.hxR20i638R21i622gR22r71goR3jR4:4:1aoR3jR4:7:2oR6jR7:4:0R8y4:pcurR10jR11:5:2i3r11R16i-270goR3jR4:8:2oR3jR4:1:1oR6r58R8y11:getPositionR10jR11:13:1aoR1aoR8R25R10jR11:5:2i2r11ghR30r81ghR16i-269gR17oR18R34R20i670R21i659gR22r90gaoR3jR4:1:1r34R17oR18R34R20i679R21i671gR22r35ghR17oR18R34R20i680R21i659gR22r81gR17oR18R34R20i681R21i648gR22r55goR3jR4:7:2oR6r80R8y4:ccurR10jR11:5:2i4r11R16i-271goR3jR4:8:2oR3jR4:2:1jR23:33:0R17oR18R34R20i705R21i698gR22jR11:13:1aoR1aoR8y1:_R10jR11:10:0goR8R25R10jR11:5:2i2r11ghR30r103ghgaoR3jR4:1:1oR6r70R8y7:textureR10r113R16i-254gR17oR18R34R20i705R21i698gR22r113goR3jR4:1:1r34R17oR18R34R20i718R21i710gR22r35ghR17oR18R34R20i719R21i698gR22r103gR17oR18R34R20i720R21i687gR22r55goR3jR4:7:2oR6r80R8R15R10jR11:5:2i4r11R16i-272goR3jR4:8:2oR3jR4:2:1r22R17oR18R34R20i742R21i738gR22r26gaoR3jR4:0:1jR26:3:1zR17oR18R34R20i744R21i743gR22r43goR3jR4:0:1jR26:3:1zR17oR18R34R20i747R21i746gR22r43goR3jR4:0:1jR26:3:1zR17oR18R34R20i750R21i749gR22r43goR3jR4:0:1jR26:3:1zR17oR18R34R20i753R21i752gR22r43ghR17oR18R34R20i754R21i738gR22r131gR17oR18R34R20i755R21i726gR22r55goR3jR4:7:2oR6r80R8y4:ncurR10jR11:5:2i3r11R16i-273goR3jR4:8:2oR3jR4:2:1jR23:55:0R17oR18R34R20i784R21i772gR22jR11:13:1aoR1aoR8y5:valueR10jR11:5:2i4r11ghR30r159ghgaoR3jR4:8:2oR3jR4:2:1r106R17oR18R34R20i798R21i785gR22jR11:13:1aoR1aoR8R38R10r113gr114hR30r103ghgaoR3jR4:1:1oR6r70R8y13:normalTextureR10r113R16i-265gR17oR18R34R20i798R21i785gR22r113goR3jR4:1:1r34R17oR18R34R20i811R21i803gR22r35ghR17oR18R34R20i812R21i785gR22r103ghR17oR18R34R20i813R21i772gR22r159gR17oR18R34R20i814R21i761gR22r55goR3jR4:20:3y6:unrollahoR3jR4:13:3oR6r80R8y1:iR10jR11:1:0R16i-274goR3jR4:5:3jR5:21:0oR3jR4:5:3jR5:0:0oR3jR4:6:2jy15:haxe.macro.Unop:3:0oR3jR4:1:1oR6r70R8y7:QualityR10r199R32ajR33:0:1nhR16i-256gR17oR18R34R20i846R21i839gR22r199gR17oR18R34R20i846R21i838gR22r199goR3jR4:0:1jR26:2:1i1R17oR18R34R20i853R21i849gR22r199gR17oR18R34R20i853R21i838gR22r199goR3jR4:1:1r207R17oR18R34R20i860R21i853gR22r199gR17oR18R34R20i860R21i838gR22jR11:14:2r199jy13:hxsl.SizeDecl:0:1zgoR3jR4:4:1aoR3jR4:7:2oR6r80R8R25R10jR11:5:2i2r11R16i-275goR3jR4:5:3r203oR3jR4:1:1r34R17oR18R34R20i888R21i880gR22r35goR3jR4:5:3jR5:1:0oR3jR4:1:1oR6r70R8y5:pixelR10jR11:5:2i2r11R16i-259gR17oR18R34R20i896R21i891gR22r240goR3jR4:8:2oR3jR4:2:1jR23:36:0R17oR18R34R20i904R21i899gR22jR11:13:1aoR1aoR8R41R10r199ghR30r43ghgaoR3jR4:1:1r198R17oR18R34R20i906R21i905gR22r199ghR17oR18R34R20i907R21i899gR22r43gR17oR18R34R20i907R21i891gR22r240gR17oR18R34R20i907R21i880gR22r231gR17oR18R34R20i908R21i871gR22r55goR3jR4:7:2oR6r80R8y1:cR10r103R16i-276goR3jR4:8:2oR3jR4:2:1r106R17oR18R34R20i930R21i923gR22jR11:13:1aoR1aoR8R38R10r113gr114hR30r103ghgaoR3jR4:1:1r119R17oR18R34R20i930R21i923gR22r113goR3jR4:1:1r230R17oR18R34R20i937R21i935gR22r231ghR17oR18R34R20i938R21i923gR22r103gR17oR18R34R20i939R21i915gR22r55goR3jR4:7:2oR6r80R8R17R10r81R16i-277goR3jR4:8:2oR3jR4:1:1r84R17oR18R34R20i965R21i954gR22r90gaoR3jR4:1:1r230R17oR18R34R20i968R21i966gR22r231ghR17oR18R34R20i969R21i954gR22r81gR17oR18R34R20i970R21i946gR22r55goR3jR4:7:2oR6r80R8y1:dR10r43R16i-278goR3jR4:8:2oR3jR4:2:1jR23:29:0R17oR18R34R20i995R21i985gR22jR11:13:1aoR1aoR8R38R10jR11:5:2i3r11goR8y1:bR10jR11:5:2i3r11ghR30r43ghgaoR3jR4:3:1oR3jR4:5:3jR5:3:0oR3jR4:1:1r288R17oR18R34R20i987R21i986gR22r81goR3jR4:1:1r79R17oR18R34R20i994R21i990gR22r81gR17oR18R34R20i994R21i986gR22r312gR17oR18R34R20i995R21i985gR22r312goR3jR4:5:3r319oR3jR4:1:1r288R17oR18R34R20i1001R21i1000gR22r81goR3jR4:1:1r79R17oR18R34R20i1008R21i1004gR22r81gR17oR18R34R20i1008R21i1000gR22jR11:5:2i3r11ghR17oR18R34R20i1009R21i985gR22r43gR17oR18R34R20i1010R21i977gR22r55goR3jR4:7:2oR6r80R8y1:nR10r159R16i-279goR3jR4:8:2oR3jR4:2:1r162R17oR18R34R20i1037R21i1025gR22r170gaoR3jR4:8:2oR3jR4:2:1r106R17oR18R34R20i1051R21i1038gR22jR11:13:1aoR1aoR8R38R10r113gr114hR30r103ghgaoR3jR4:1:1r183R17oR18R34R20i1051R21i1038gR22r113goR3jR4:1:1r230R17oR18R34R20i1058R21i1056gR22r231ghR17oR18R34R20i1059R21i1038gR22r103ghR17oR18R34R20i1060R21i1025gR22r159gR17oR18R34R20i1061R21i1017gR22r55goR3jR4:5:3r7oR3jR4:1:1r266R17oR18R34R20i1071R21i1070gR22r103goR3jR4:8:2oR3jR4:2:1jR23:24:0R17oR18R34R20i1077R21i1074gR22jR11:13:1aoR1aoR8y1:xR10r103goR8y1:yR10r103goR8y1:aR10r43ghR30r103ghgaoR3jR4:1:1r102R17oR18R34R20i1082R21i1078gR22r103goR3jR4:1:1r266R17oR18R34R20i1085R21i1084gR22r103goR3jR4:8:2oR3jR4:2:1r305R17oR18R34R20i1091R21i1087gR22jR11:13:1aoR1aoR8R38R10r159gr313hR30r43ghgaoR3jR4:1:1r158R17oR18R34R20i1091R21i1087gR22r159goR3jR4:1:1r345R17oR18R34R20i1097R21i1096gR22r159ghR17oR18R34R20i1098R21i1087gR22r43ghR17oR18R34R20i1099R21i1074gR22r103gR17oR18R34R20i1099R21i1070gR22r103goR3jR4:5:3r7oR3jR4:1:1r266R17oR18R34R20i1108R21i1107gR22r103goR3jR4:8:2oR3jR4:2:1r379R17oR18R34R20i1114R21i1111gR22jR11:13:1ar383hgaoR3jR4:1:1r266R17oR18R34R20i1116R21i1115gR22r103goR3jR4:1:1r102R17oR18R34R20i1122R21i1118gR22r103goR3jR4:8:2oR3jR4:2:1jR23:21:0R17oR18R34R20i1154R21i1124gR22jR11:13:1aoR1aoR8R38R10r43goR8R51R10r43ghR30r43ghgaoR3jR4:3:1oR3jR4:5:3r237oR3jR4:8:2oR3jR4:2:1jR23:22:0R17oR18R34R20i1136R21i1125gR22jR11:13:1aoR1aoR8R38R10r43gr444hR30r43ghgaoR3jR4:3:1oR3jR4:5:3r319oR3jR4:1:1r302R17oR18R34R20i1127R21i1126gR22r43goR3jR4:0:1jR26:3:1d0.001R17oR18R34R20i1135R21i1130gR22r43gR17oR18R34R20i1135R21i1126gR22r43gR17oR18R34R20i1136R21i1125gR22r43goR3jR4:0:1jR26:3:1d0R17oR18R34R20i1143R21i1141gR22r43ghR17oR18R34R20i1144R21i1125gR22r43goR3jR4:0:1jR26:3:1i100000R17oR18R34R20i1153R21i1147gR22r43gR17oR18R34R20i1153R21i1125gR22r43gR17oR18R34R20i1154R21i1124gR22r43goR3jR4:0:1jR26:3:1d1R17oR18R34R20i1161R21i1159gR22r43ghR17oR18R34R20i1162R21i1124gR22r43ghR17oR18R34R20i1163R21i1111gR22r103gR17oR18R34R20i1163R21i1107gR22r103goR3jR4:5:3jR5:20:1r203oR3jR4:1:1r130R17oR18R34R20i1176R21i1171gR22r131goR3jR4:5:3r237oR3jR4:1:1r266R17oR18R34R20i1181R21i1180gR22r103goR3jR4:16:2oR3jR4:1:1oR6r70R8y6:valuesR10jR11:14:2r43jR47:1:1r207R16i-258gR17oR18R34R20i1190R21i1184gR22r510goR3jR4:10:3oR3jR4:5:3jR5:9:0oR3jR4:1:1r198R17oR18R34R20i1192R21i1191gR22r199goR3jR4:0:1jR26:2:1zR17oR18R34R20i1196R21i1195gR22r199gR17oR18R34R20i1196R21i1191gR22r71goR3jR4:6:2r205oR3jR4:1:1r198R17oR18R34R20i1201R21i1200gR22r199gR17oR18R34R20i1201R21i1199gR22r199goR3jR4:1:1r198R17oR18R34R20i1205R21i1204gR22r199gR17oR18R34R20i1205R21i1191gR22r199gR17oR18R34R20i1206R21i1184gR22r43gR17oR18R34R20i1206R21i1180gR22r103gR17oR18R34R20i1206R21i1171gR22r131ghR17oR18R34R20i1214R21i863gR22r55gR17oR18R34R20i1214R21i828gR22r55gR17oR18R34R20i1214R21i821gR22r55goR3jR4:5:3r7oR3jR4:1:1r15R17oR18R34R20i1232R21i1220gR22r16goR3jR4:1:1r130R17oR18R34R20i1240R21i1235gR22r131gR17oR18R34R20i1240R21i1220gR22r16ghR17oR18R34R20i1247R21i641gR22r55goR3jR4:10:3oR3jR4:1:1oR6r70R8y7:isDepthR10r71R32ajR33:0:1nhR16i-257gR17oR18R34R20i1268R21i1261gR22r71goR3jR4:4:1aoR3jR4:7:2oR6r80R8y3:valR10r43R16i-280goR3jR4:0:1jR26:3:1d0R17oR18R34R20i1290R21i1288gR22r43gR17oR18R34R20i1291R21i1278gR22r55goR3jR4:20:3R43ahoR3jR4:13:3oR6r80R8R44R10r199R16i-281goR3jR4:5:3r201oR3jR4:5:3r203oR3jR4:6:2r205oR3jR4:1:1r207R17oR18R34R20i1323R21i1316gR22r199gR17oR18R34R20i1323R21i1315gR22r199goR3jR4:0:1jR26:2:1i1R17oR18R34R20i1330R21i1326gR22r199gR17oR18R34R20i1330R21i1315gR22r199goR3jR4:1:1r207R17oR18R34R20i1337R21i1330gR22r199gR17oR18R34R20i1337R21i1315gR22jR11:14:2r199jR47:0:1zgoR3jR4:5:3jR5:20:1r203oR3jR4:1:1r569R17oR18R34R20i1349R21i1346gR22r43goR3jR4:5:3r237oR3jR4:8:2oR3jR4:2:1jR23:53:0R17oR18R34R20i1359R21i1353gR22jR11:13:1aoR1aoR8R41R10jR11:5:2i4r11ghR30r43ghgaoR3jR4:8:2oR3jR4:2:1r106R17oR18R34R20i1367R21i1360gR22jR11:13:1aoR1aoR8R38R10r113gr114hR30r103ghgaoR3jR4:1:1r119R17oR18R34R20i1367R21i1360gR22r113goR3jR4:5:3r203oR3jR4:1:1r34R17oR18R34R20i1380R21i1372gR22r35goR3jR4:5:3r237oR3jR4:1:1r239R17oR18R34R20i1388R21i1383gR22r240goR3jR4:8:2oR3jR4:2:1r245R17oR18R34R20i1396R21i1391gR22jR11:13:1ar249hgaoR3jR4:1:1r579R17oR18R34R20i1398R21i1397gR22r199ghR17oR18R34R20i1399R21i1391gR22r43gR17oR18R34R20i1399R21i1383gR22r240gR17oR18R34R20i1399R21i1372gR22jR11:5:2i2r11ghR17oR18R34R20i1400R21i1360gR22r103ghR17oR18R34R20i1401R21i1353gR22r43goR3jR4:16:2oR3jR4:1:1r508R17oR18R34R20i1410R21i1404gR22r510goR3jR4:10:3oR3jR4:5:3r515oR3jR4:1:1r579R17oR18R34R20i1412R21i1411gR22r199goR3jR4:0:1jR26:2:1zR17oR18R34R20i1416R21i1415gR22r199gR17oR18R34R20i1416R21i1411gR22r71goR3jR4:6:2r205oR3jR4:1:1r579R17oR18R34R20i1421R21i1420gR22r199gR17oR18R34R20i1421R21i1419gR22r199goR3jR4:1:1r579R17oR18R34R20i1425R21i1424gR22r199gR17oR18R34R20i1425R21i1411gR22r199gR17oR18R34R20i1426R21i1404gR22r43gR17oR18R34R20i1426R21i1353gR22r43gR17oR18R34R20i1426R21i1346gR22r43gR17oR18R34R20i1426R21i1305gR22r55gR17oR18R34R20i1426R21i1298gR22r55goR3jR4:5:3r7oR3jR4:1:1r15R17oR18R34R20i1445R21i1433gR22r16goR3jR4:8:2oR3jR4:2:1jR23:52:0R17oR18R34R20i1452R21i1448gR22jR11:13:1aoR1aoR8R41R10r43ghR30jR11:5:2i4r11ghgaoR3jR4:8:2oR3jR4:2:1r437R17oR18R34R20i1456R21i1453gR22jR11:13:1aoR1aoR8R38R10r43gr444hR30r43ghgaoR3jR4:1:1r569R17oR18R34R20i1456R21i1453gR22r43goR3jR4:0:1jR26:3:1d0.9999999R17oR18R34R20i1470R21i1461gR22r43ghR17oR18R34R20i1471R21i1453gR22r43ghR17oR18R34R20i1472R21i1448gR22r710gR17oR18R34R20i1472R21i1433gR22r16ghR17oR18R34R20i1479R21i1271gR22r55goR3jR4:4:1aoR3jR4:7:2oR6r80R8R15R10jR11:5:2i4r11R16i-282goR3jR4:8:2oR3jR4:2:1r22R17oR18R34R20i1508R21i1504gR22r26gaoR3jR4:0:1jR26:3:1zR17oR18R34R20i1510R21i1509gR22r43goR3jR4:0:1jR26:3:1zR17oR18R34R20i1513R21i1512gR22r43goR3jR4:0:1jR26:3:1zR17oR18R34R20i1516R21i1515gR22r43goR3jR4:0:1jR26:3:1zR17oR18R34R20i1519R21i1518gR22r43ghR17oR18R34R20i1520R21i1504gR22r742gR17oR18R34R20i1521R21i1492gR22r55goR3jR4:20:3R43ahoR3jR4:13:3oR6r80R8R44R10r199R16i-283goR3jR4:5:3r201oR3jR4:5:3r203oR3jR4:6:2r205oR3jR4:1:1r207R17oR18R34R20i1553R21i1546gR22r199gR17oR18R34R20i1553R21i1545gR22r199goR3jR4:0:1jR26:2:1i1R17oR18R34R20i1560R21i1556gR22r199gR17oR18R34R20i1560R21i1545gR22r199goR3jR4:1:1r207R17oR18R34R20i1567R21i1560gR22r199gR17oR18R34R20i1567R21i1545gR22jR11:14:2r199jR47:0:1zgoR3jR4:5:3jR5:20:1r203oR3jR4:1:1r741R17oR18R34R20i1581R21i1576gR22r742goR3jR4:5:3r237oR3jR4:8:2oR3jR4:2:1r106R17oR18R34R20i1592R21i1585gR22jR11:13:1aoR1aoR8R38R10r113gr114hR30r103ghgaoR3jR4:1:1r119R17oR18R34R20i1592R21i1585gR22r113goR3jR4:5:3r203oR3jR4:1:1r34R17oR18R34R20i1605R21i1597gR22r35goR3jR4:5:3r237oR3jR4:1:1r239R17oR18R34R20i1613R21i1608gR22r240goR3jR4:8:2oR3jR4:2:1r245R17oR18R34R20i1621R21i1616gR22jR11:13:1ar249hgaoR3jR4:1:1r771R17oR18R34R20i1623R21i1622gR22r199ghR17oR18R34R20i1624R21i1616gR22r43gR17oR18R34R20i1624R21i1608gR22r240gR17oR18R34R20i1624R21i1597gR22jR11:5:2i2r11ghR17oR18R34R20i1625R21i1585gR22r103goR3jR4:16:2oR3jR4:1:1r508R17oR18R34R20i1634R21i1628gR22r510goR3jR4:10:3oR3jR4:5:3r515oR3jR4:1:1r771R17oR18R34R20i1636R21i1635gR22r199goR3jR4:0:1jR26:2:1zR17oR18R34R20i1640R21i1639gR22r199gR17oR18R34R20i1640R21i1635gR22r71goR3jR4:6:2r205oR3jR4:1:1r771R17oR18R34R20i1645R21i1644gR22r199gR17oR18R34R20i1645R21i1643gR22r199goR3jR4:1:1r771R17oR18R34R20i1649R21i1648gR22r199gR17oR18R34R20i1649R21i1635gR22r199gR17oR18R34R20i1650R21i1628gR22r43gR17oR18R34R20i1650R21i1585gR22r103gR17oR18R34R20i1650R21i1576gR22r742gR17oR18R34R20i1650R21i1535gR22r55gR17oR18R34R20i1650R21i1528gR22r55goR3jR4:5:3r7oR3jR4:1:1r15R17oR18R34R20i1669R21i1657gR22r16goR3jR4:1:1r741R17oR18R34R20i1677R21i1672gR22r742gR17oR18R34R20i1677R21i1657gR22r16ghR17oR18R34R20i1684R21i1485gR22r55gR17oR18R34R20i1684R21i1257gR22r55gR17oR18R34R20i1684R21i618gR22r55goR3jR4:10:3oR3jR4:1:1oR6r70R8y13:hasFixedColorR10r71R32ajR33:0:1nhR16i-260gR17oR18R34R20i1706R21i1693gR22r71goR3jR4:4:1aoR3jR4:5:3r7oR3jR4:9:2oR3jR4:1:1r15R17oR18R34R20i1728R21i1716gR22r16gajy14:hxsl.Component:0:0jR60:1:0jR60:2:0hR17oR18R34R20i1732R21i1716gR22jR11:5:2i3r11goR3jR4:9:2oR3jR4:1:1oR6r70R8y10:fixedColorR10jR11:5:2i4r11R16i-262gR17oR18R34R20i1745R21i1735gR22r914gar905r906r907hR17oR18R34R20i1749R21i1735gR22jR11:5:2i3r11gR17oR18R34R20i1749R21i1716gR22r910goR3jR4:10:3oR3jR4:1:1oR6r70R8y16:smoothFixedColorR10r71R32ajR33:0:1nhR16i-261gR17oR18R34R20i1776R21i1760gR22r71goR3jR4:5:3jR5:20:1r237oR3jR4:9:2oR3jR4:1:1r15R17oR18R34R20i1797R21i1785gR22r16gajR60:3:0hR17oR18R34R20i1799R21i1785gR22r43goR3jR4:9:2oR3jR4:1:1r913R17oR18R34R20i1813R21i1803gR22r914gar937hR17oR18R34R20i1815R21i1803gR22r43gR17oR18R34R20i1815R21i1785gR22r43goR3jR4:5:3r7oR3jR4:9:2oR3jR4:1:1r15R17oR18R34R20i1845R21i1833gR22r16gar937hR17oR18R34R20i1847R21i1833gR22r43goR3jR4:5:3r237oR3jR4:9:2oR3jR4:1:1r913R17oR18R34R20i1860R21i1850gR22r914gar937hR17oR18R34R20i1862R21i1850gR22r43goR3jR4:8:2oR3jR4:2:1r245R17oR18R34R20i1870R21i1865gR22jR11:13:1aoR1aoR8R41R10r71ghR30r43ghgaoR3jR4:5:3jR5:7:0oR3jR4:9:2oR3jR4:1:1r15R17oR18R34R20i1883R21i1871gR22r16gar937hR17oR18R34R20i1885R21i1871gR22r43goR3jR4:0:1jR26:3:1zR17oR18R34R20i1889R21i1888gR22r43gR17oR18R34R20i1889R21i1871gR22r71ghR17oR18R34R20i1890R21i1865gR22r43gR17oR18R34R20i1890R21i1850gR22r43gR17oR18R34R20i1890R21i1833gR22r43gR17oR18R34R20i1890R21i1756gR22r55ghR17oR18R34R20i1897R21i1709gR22r55gnR17oR18R34R20i1897R21i1689gR22r55ghR17oR18R34R20i1902R21i612gR22r55gR6jR27:1:0R28oR6r58R8y8:fragmentR10jR11:13:1aoR1ahR30r55ghR16i-267gR30r55goR1aoR6r80R8R25R10r89R16i-268ghR2oR3jR4:4:1aoR3jR4:7:2oR6r80R8y5:depthR10r43R16i-284goR3jR4:8:2oR3jR4:2:1r609R17oR18R34R20i1973R21i1967gR22r617gaoR3jR4:8:2oR3jR4:2:1r106R17oR18R34R20i1986R21i1974gR22jR11:13:1aoR1aoR8R38R10r113gr114hR30r103ghgaoR3jR4:1:1oR6r70R8y12:depthTextureR10r113R16i-255gR17oR18R34R20i1986R21i1974gR22r113goR3jR4:1:1r1012R17oR18R34R20i1993R21i1991gR22r89ghR17oR18R34R20i1994R21i1974gR22r103ghR17oR18R34R20i1995R21i1967gR22r43gR17oR18R34R20i1996R21i1955gR22r55goR3jR4:7:2oR6r80R8y3:uv2R10jR11:5:2i2r11R16i-285goR3jR4:5:3r237oR3jR4:3:1oR3jR4:5:3r319oR3jR4:1:1r1012R17oR18R34R20i2014R21i2012gR22r89goR3jR4:0:1jR26:3:1d0.5R17oR18R34R20i2020R21i2017gR22r43gR17oR18R34R20i2020R21i2012gR22r89gR17oR18R34R20i2021R21i2011gR22r89goR3jR4:8:2oR3jR4:2:1jR23:38:0R17oR18R34R20i2028R21i2024gR22jR11:13:1ahgaoR3jR4:0:1jR26:3:1i2R17oR18R34R20i2030R21i2029gR22r43goR3jR4:0:1jR26:3:1i-2R17oR18R34R20i2034R21i2032gR22r43ghR17oR18R34R20i2035R21i2024gR22jR11:5:2i2r11gR17oR18R34R20i2035R21i2011gR22r1047gR17oR18R34R20i2036R21i2001gR22r55goR3jR4:7:2oR6r80R8y4:tempR10r103R16i-286goR3jR4:5:3r237oR3jR4:8:2oR3jR4:2:1r22R17oR18R34R20i2056R21i2052gR22r26gaoR3jR4:1:1r1046R17oR18R34R20i2060R21i2057gR22r1047goR3jR4:1:1r1016R17oR18R34R20i2067R21i2062gR22r43goR3jR4:0:1jR26:3:1i1R17oR18R34R20i2070R21i2069gR22r43ghR17oR18R34R20i2071R21i2052gR22jR11:5:2i4r11goR3jR4:1:1oR6r70R8y21:cameraInverseViewProjR10jR11:7:0R16i-253gR17oR18R34R20i2095R21i2074gR22r1108gR17oR18R34R20i2095R21i2052gR22r103gR17oR18R34R20i2096R21i2041gR22r55goR3jR4:7:2oR6r80R8y8:originWSR10jR11:5:2i3r11R16i-287goR3jR4:5:3jR5:2:0oR3jR4:9:2oR3jR4:1:1r1086R17oR18R34R20i2120R21i2116gR22r103gar905r906r907hR17oR18R34R20i2124R21i2116gR22r1117goR3jR4:9:2oR3jR4:1:1r1086R17oR18R34R20i2131R21i2127gR22r103gar937hR17oR18R34R20i2133R21i2127gR22r43gR17oR18R34R20i2133R21i2116gR22r1117gR17oR18R34R20i2134R21i2101gR22r55goR3jR4:12:1oR3jR4:1:1r1116R17oR18R34R20i2154R21i2146gR22r1117gR17oR18R34R20i2154R21i2139gR22r55ghR17oR18R34R20i2160R21i1949gR22r55gR6jR27:3:0R28r84R30r81ghR8y15:h3d.shader.Blury4:varsar57r207r239r892r913r508r1005r84r119r561r183r69r13r32oR6r70R8y9:hasNormalR10r71R32ajR33:0:1nhR16i-264gr1107r1033r925hg";
+h3d_shader_ColorAdd.SRC = "oy4:funsaoy4:argsahy4:exproy1:ejy13:hxsl.TExprDef:4:1aoR3jR4:5:3jy16:haxe.macro.Binop:20:1jR5:0:0oR3jR4:9:2oR3jR4:1:1oy4:kindjy12:hxsl.VarKind:4:0y4:namey10:pixelColory4:typejy9:hxsl.Type:5:2i4jy12:hxsl.VecType:1:0y2:idi-301gy1:poy4:filey99:D%3A%5CNeelts%5CPrograms%5CDev%5CHaxe%5Chaxe%5Clib%5Cheaps%2F0%2C9%2C0%2Fh3d%2Fshader%2FColorAdd.hxy3:maxi180y3:mini170gy1:tr14gajy14:hxsl.Component:0:0jR20:1:0jR20:2:0hR14oR15R16R17i184R18i170gR19jR11:5:2i3r13goR3jR4:1:1oR6jR7:2:0R8y5:colorR10jR11:5:2i3r13R13i-302gR14oR15R16R17i193R18i188gR19r27gR14oR15R16R17i193R18i170gR19r23ghR14oR15R16R17i199R18i164gR19jR11:0:0gR6jy17:hxsl.FunctionKind:1:0y3:refoR6jR7:6:0R8y8:fragmentR10jR11:13:1aoR1ahy3:retr34ghR13i-303gR25r34ghR8y19:h3d.shader.ColorAddy4:varsar36r25r11hg";
+h3d_shader_ColorKey.SRC = "oy4:funsaoy4:argsahy4:exproy1:ejy13:hxsl.TExprDef:4:1aoR3jR4:7:2oy4:kindjy12:hxsl.VarKind:4:0y4:namey5:cdiffy4:typejy9:hxsl.Type:5:2i4jy12:hxsl.VecType:1:0y2:idi-307goR3jR4:5:3jy16:haxe.macro.Binop:3:0oR3jR4:1:1oR5r8R7y12:textureColorR9jR10:5:2i4r9R12i-305gy1:poy4:filey99:D%3A%5CNeelts%5CPrograms%5CDev%5CHaxe%5Chaxe%5Clib%5Cheaps%2F0%2C9%2C0%2Fh3d%2Fshader%2FColorKey.hxy3:maxi197y3:mini185gy1:tr15goR3jR4:1:1oR5jR6:2:0R7y8:colorKeyR9jR10:5:2i4r9R12i-304gR15oR16R17R18i208R19i200gR20r21gR15oR16R17R18i208R19i185gR20r10gR15oR16R17R18i209R19i173gR20jR10:0:0goR3jR4:10:3oR3jR4:5:3jR13:9:0oR3jR4:8:2oR3jR4:2:1jy12:hxsl.TGlobal:29:0R15oR16R17R18i223R19i218gR20jR10:13:1aoR1aoR7y1:_R9r10goR7y1:bR9jR10:5:2i4r9ghy3:retjR10:3:0ghgaoR3jR4:1:1r7R15oR16R17R18i223R19i218gR20r10goR3jR4:1:1r7R15oR16R17R18i233R19i228gR20r10ghR15oR16R17R18i234R19i218gR20r43goR3jR4:0:1jy10:hxsl.Const:3:1d1e-005R15oR16R17R18i244R19i237gR20r43gR15oR16R17R18i244R19i218gR20jR10:2:0goR3jR4:11:0R15oR16R17R18i254R19i247gR20r28gnR15oR16R17R18i254R19i214gR20r28ghR15oR16R17R18i260R19i167gR20r28gR5jy17:hxsl.FunctionKind:1:0y3:refoR5jR6:6:0R7y8:fragmentR9jR10:13:1aoR1ahR25r28ghR12i-306gR25r28ghR7y19:h3d.shader.ColorKeyy4:varsar69r19r14hg";
+h3d_shader_ColorMatrix.SRC = "oy4:funsaoy4:argsahy4:exproy1:ejy13:hxsl.TExprDef:4:1aoR3jR4:5:3jy16:haxe.macro.Binop:4:0oR3jR4:1:1oy4:kindjy12:hxsl.VarKind:4:0y4:namey10:pixelColory4:typejy9:hxsl.Type:5:2i4jy12:hxsl.VecType:1:0y2:idi-308gy1:poy4:filey102:D%3A%5CNeelts%5CPrograms%5CDev%5CHaxe%5Chaxe%5Clib%5Cheaps%2F0%2C9%2C0%2Fh3d%2Fshader%2FColorMatrix.hxy3:maxi184y3:mini174gy1:tr12goR3jR4:8:2oR3jR4:2:1jy12:hxsl.TGlobal:40:0R14oR15R16R17i191R18i187gR19jR11:13:1ahgaoR3jR4:9:2oR3jR4:3:1oR3jR4:5:3jR5:1:0oR3jR4:8:2oR3jR4:2:1r17R14oR15R16R17i198R18i194gR19r21gaoR3jR4:9:2oR3jR4:1:1r9R14oR15R16R17i209R18i199gR19r12gajy14:hxsl.Component:0:0jR21:1:0jR21:2:0hR14oR15R16R17i213R18i199gR19jR11:5:2i3r11goR3jR4:0:1jy10:hxsl.Const:3:1d1R14oR15R16R17i216R18i214gR19jR11:3:0ghR14oR15R16R17i217R18i194gR19jR11:5:2i4r11goR3jR4:1:1oR6jR7:2:0R8y6:matrixR10jR11:7:0R13i-309gR14oR15R16R17i226R18i220gR19r54gR14oR15R16R17i226R18i194gR19jR11:5:2i4r11gR14oR15R16R17i227R18i193gR19r59gar37r38r39hR14oR15R16R17i231R18i193gR19jR11:5:2i3r11goR3jR4:9:2oR3jR4:3:1oR3jR4:5:3r26oR3jR4:1:1r9R14oR15R16R17i244R18i234gR19r12goR3jR4:1:1r52R14oR15R16R17i253R18i247gR19r54gR14oR15R16R17i253R18i234gR19r59gR14oR15R16R17i254R18i233gR19r59gajR21:3:0hR14oR15R16R17i256R18i233gR19r47ghR14oR15R16R17i257R18i187gR19jR11:5:2i4r11gR14oR15R16R17i257R18i174gR19r12ghR14oR15R16R17i263R18i168gR19jR11:0:0gR6jy17:hxsl.FunctionKind:1:0y3:refoR6jR7:6:0R8y8:fragmentR10jR11:13:1aoR1ahy3:retr90ghR13i-310gR27r90ghR8y22:h3d.shader.ColorMatrixy4:varsar92r52r9hg";
 h3d_shader_DirLight.SRC = "oy4:funsaoy4:argsahy4:exproy1:ejy13:hxsl.TExprDef:4:1aoR3jR4:7:2oy4:kindjy12:hxsl.VarKind:4:0y4:namey4:diffy4:typejy9:hxsl.Type:3:0y2:idi-23goR3jR4:8:2oR3jR4:2:1jy12:hxsl.TGlobal:22:0y1:poy4:filey99:D%3A%5CNeelts%5CPrograms%5CDev%5CHaxe%5Chaxe%5Clib%5Cheaps%2F0%2C9%2C0%2Fh3d%2Fshader%2FDirLight.hxy3:maxi501y3:mini468gy1:tjR10:13:1aoR1aoR7y1:_R9r9goR7y1:bR9r9ghy3:retr9ghgaoR3jR4:8:2oR3jR4:2:1jR12:29:0R13oR14R15R16i485R17i468gR18jR10:13:1aoR1aoR7R19R9jR10:5:2i3jy12:hxsl.VecType:1:0goR7R20R9jR10:5:2i3r31ghR21r9ghgaoR3jR4:1:1oR5r8R7y17:transformedNormalR9r32R11i-16gR13oR14R15R16i485R17i468gR18r32goR3jR4:6:2jy15:haxe.macro.Unop:3:0oR3jR4:1:1oR5jR6:2:0R7y9:directionR9jR10:5:2i3r31R11i-10gR13oR14R15R16i500R17i491gR18r46gR13oR14R15R16i500R17i490gR18r46ghR13oR14R15R16i501R17i468gR18r9goR3jR4:0:1jy10:hxsl.Const:3:1d0R13oR14R15R16i508R17i506gR18r9ghR13oR14R15R16i509R17i468gR18r9gR13oR14R15R16i510R17i457gR18jR10:0:0goR3jR4:10:3oR3jR4:6:2jR24:2:0oR3jR4:1:1oR5r45R7y14:enableSpecularR9jR10:2:0y10:qualifiersajy17:hxsl.VarQualifier:0:1nhR11i-11gR13oR14R15R16i534R17i520gR18r67gR13oR14R15R16i534R17i519gR18r67goR3jR4:12:1oR3jR4:5:3jy16:haxe.macro.Binop:1:0oR3jR4:1:1oR5r45R7y5:colorR9jR10:5:2i3r31R11i-9gR13oR14R15R16i554R17i549gR18r79goR3jR4:1:1r7R13oR14R15R16i561R17i557gR18r9gR13oR14R15R16i561R17i549gR18r79gR13oR14R15R16i561R17i542gR18r61gnR13oR14R15R16i561R17i515gR18r61goR3jR4:7:2oR5r8R7y1:rR9r34R11i-24goR3jR4:8:2oR3jR4:2:1jR12:31:0R13oR14R15R16i612R17i575gR18jR10:13:1aoR1aoR7R19R9r34ghR21r34ghgaoR3jR4:8:2oR3jR4:2:1jR12:32:0R13oR14R15R16i582R17i575gR18jR10:13:1aoR1aoR7y1:aR9r34goR7R20R9r34ghR21r34ghgaoR3jR4:1:1r44R13oR14R15R16i592R17i583gR18r46goR3jR4:1:1r38R13oR14R15R16i611R17i594gR18r32ghR13oR14R15R16i612R17i575gR18r34ghR13oR14R15R16i624R17i575gR18r34gR13oR14R15R16i625R17i567gR18r61goR3jR4:7:2oR5r8R7y9:specValueR9r9R11i-25goR3jR4:8:2oR3jR4:2:1r12R13oR14R15R16i704R17i646gR18jR10:13:1aoR1aoR7R19R9r9gr19hR21r9ghgaoR3jR4:8:2oR3jR4:2:1r24R13oR14R15R16i647R17i646gR18jR10:13:1aoR1aoR7R19R9r34gr33hR21r9ghgaoR3jR4:1:1r92R13oR14R15R16i647R17i646gR18r34goR3jR4:8:2oR3jR4:2:1r95R13oR14R15R16i691R17i652gR18jR10:13:1aoR1aoR7R19R9jR10:5:2i3r31ghR21r34ghgaoR3jR4:3:1oR3jR4:5:3jR30:3:0oR3jR4:1:1oR5jR6:0:0R7y8:positionR9jR10:5:2i3r31y6:parentoR5r169R7y6:cameraR9jR10:12:1ar168hR11i-12gR11i-13gR13oR14R15R16i668R17i653gR18r170goR3jR4:1:1oR5r8R7y19:transformedPositionR9jR10:5:2i3r31R11i-17gR13oR14R15R16i690R17i671gR18r178gR13oR14R15R16i690R17i653gR18r161gR13oR14R15R16i691R17i652gR18r161ghR13oR14R15R16i703R17i652gR18r34ghR13oR14R15R16i704R17i646gR18r9goR3jR4:0:1jR26:3:1d0R13oR14R15R16i711R17i709gR18r9ghR13oR14R15R16i712R17i646gR18r9gR13oR14R15R16i713R17i630gR18r61goR3jR4:12:1oR3jR4:5:3r76oR3jR4:1:1r78R13oR14R15R16i730R17i725gR18r79goR3jR4:3:1oR3jR4:5:3jR30:0:0oR3jR4:1:1r7R13oR14R15R16i738R17i734gR18r9goR3jR4:5:3r76oR3jR4:1:1oR5r8R7y9:specColorR9jR10:5:2i3r31R11i-19gR13oR14R15R16i750R17i741gR18r211goR3jR4:8:2oR3jR4:2:1jR12:8:0R13oR14R15R16i756R17i753gR18jR10:13:1aoR1aoR7R33R9r9gr19hR21r9ghgaoR3jR4:1:1r129R13oR14R15R16i766R17i757gR18r9goR3jR4:1:1oR5r8R7y9:specPowerR9r9R11i-18gR13oR14R15R16i777R17i768gR18r9ghR13oR14R15R16i778R17i753gR18r9gR13oR14R15R16i778R17i741gR18r211gR13oR14R15R16i778R17i734gR18r211gR13oR14R15R16i779R17i733gR18r211gR13oR14R15R16i779R17i725gR18jR10:5:2i3r31gR13oR14R15R16i779R17i718gR18r61ghR13oR14R15R16i785R17i451gR18r61gR5jy17:hxsl.FunctionKind:3:0y3:refoR5jR6:6:0R7y12:calcLightingR9jR10:13:1aoR1ahR21jR10:5:2i3r31ghR11i-20gR21r253goR1ahR2oR3jR4:4:1aoR3jR4:5:3jR30:20:1r204oR3jR4:9:2oR3jR4:1:1oR5r8R7y10:lightColorR9jR10:5:2i3r31R11i-14gR13oR14R15R16i825R17i815gR18r264gajy14:hxsl.Component:0:0jR45:1:0jR45:2:0hR13oR14R15R16i829R17i815gR18jR10:5:2i3r31goR3jR4:8:2oR3jR4:1:1r248R13oR14R15R16i845R17i833gR18r254gahR13oR14R15R16i847R17i833gR18r253gR13oR14R15R16i847R17i815gR18r273ghR13oR14R15R16i853R17i809gR18r61gR5jR41:0:0R42oR5r249R7y6:vertexR9jR10:13:1aoR1ahR21r61ghR11i-21gR21r61goR1ahR2oR3jR4:4:1aoR3jR4:5:3jR30:20:1r204oR3jR4:9:2oR3jR4:1:1oR5r8R7y15:lightPixelColorR9jR10:5:2i3r31R11i-15gR13oR14R15R16i900R17i885gR18r300gar268r269r270hR13oR14R15R16i904R17i885gR18jR10:5:2i3r31goR3jR4:8:2oR3jR4:1:1r248R13oR14R15R16i920R17i908gR18r254gahR13oR14R15R16i922R17i908gR18r253gR13oR14R15R16i922R17i885gR18r306ghR13oR14R15R16i928R17i879gR18r61gR5jR41:1:0R42oR5r249R7y8:fragmentR9jR10:13:1aoR1ahR21r61ghR11i-22gR21r61ghR7y19:h3d.shader.DirLighty4:varsar286r66r38r263r210r319r248r171r78r177r44r229r299hg";
 h3d_shader_LineShader.SRC = "oy4:funsaoy4:argsahy4:exproy1:ejy13:hxsl.TExprDef:4:1aoR3jR4:4:1aoR3jR4:7:2oy4:kindjy12:hxsl.VarKind:4:0y4:namey3:diry4:typejy9:hxsl.Type:5:2i3jy12:hxsl.VecType:1:0y2:idi-105goR3jR4:5:3jy16:haxe.macro.Binop:1:0oR3jR4:1:1oR5jR6:1:0R7y6:normalR9jR10:5:2i3r11y6:parentoR5r17R7y5:inputR9jR10:12:1aoR5r17R7y8:positionR9jR10:5:2i3r11R15r19R12i-92gr16oR5r17R7y2:uvR9jR10:5:2i2r11R15r19R12i-94ghR12i-91gR12i-93gy1:poy4:filey101:D%3A%5CNeelts%5CPrograms%5CDev%5CHaxe%5Chaxe%5Clib%5Cheaps%2F0%2C9%2C0%2Fh3d%2Fshader%2FLineShader.hxy3:maxi683y3:mini671gy1:tr18goR3jR4:8:2oR3jR4:2:1jy12:hxsl.TGlobal:48:0R19oR20R21R22i702R23i686gR24jR10:13:1ahgaoR3jR4:1:1oR5jR6:0:0R7y9:modelViewR9jR10:7:0R15oR5r38R7y6:globalR9jR10:12:1aoR5r38R7y9:pixelSizeR9jR10:5:2i2r11R15r40R12i-89gr37hR12i-88gy10:qualifiersajy17:hxsl.VarQualifier:3:0hR12i-90gR19oR20R21R22i702R23i686gR24r39ghR19oR20R21R22i709R23i686gR24jR10:6:0gR19oR20R21R22i709R23i671gR24r12gR19oR20R21R22i710R23i661gR24jR10:0:0goR3jR4:5:3jR13:4:0oR3jR4:1:1oR5r10R7y4:pdirR9jR10:5:2i4r11R12i-102gR19oR20R21R22i734R23i730gR24r61goR3jR4:5:3r14oR3jR4:8:2oR3jR4:2:1jR25:40:0R19oR20R21R22i741R23i737gR24jR10:13:1ahgaoR3jR4:5:3r14oR3jR4:1:1r9R19oR20R21R22i745R23i742gR24r12goR3jR4:8:2oR3jR4:2:1r30R19oR20R21R22i752R23i748gR24jR10:13:1ahgaoR3jR4:1:1oR5r38R7y4:viewR9r39R15oR5r38R7y6:cameraR9jR10:12:1ar85oR5r38R7y4:projR9r39R15r86R12i-86goR5r38R7y8:viewProjR9r39R15r86R12i-87ghR12i-84gR12i-85gR19oR20R21R22i764R23i753gR24r39ghR19oR20R21R22i765R23i748gR24r51gR19oR20R21R22i765R23i742gR24r12goR3jR4:0:1jy10:hxsl.Const:3:1i1R19oR20R21R22i768R23i767gR24jR10:3:0ghR19oR20R21R22i769R23i737gR24jR10:5:2i4r11goR3jR4:1:1r88R19oR20R21R22i783R23i772gR24r39gR19oR20R21R22i783R23i737gR24jR10:5:2i4r11gR19oR20R21R22i783R23i730gR24r61goR3jR4:5:3jR13:20:1r14oR3jR4:9:2oR3jR4:1:1r60R19oR20R21R22i794R23i790gR24r61gajy14:hxsl.Component:0:0jR37:1:0hR19oR20R21R22i797R23i790gR24jR10:5:2i2r11goR3jR4:5:3jR13:2:0oR3jR4:0:1jR36:3:1i1R19oR20R21R22i802R23i801gR24r101goR3jR4:8:2oR3jR4:2:1jR25:13:0R19oR20R21R22i809R23i805gR24jR10:13:1aoR1aoR7y5:valueR9r101ghy3:retr101ghgaoR3jR4:5:3jR13:0:0oR3jR4:5:3r14oR3jR4:9:2oR3jR4:1:1r60R19oR20R21R22i814R23i810gR24r61gar120hR19oR20R21R22i816R23i810gR24r101goR3jR4:9:2oR3jR4:1:1r60R19oR20R21R22i823R23i819gR24r61gar120hR19oR20R21R22i825R23i819gR24r101gR19oR20R21R22i825R23i810gR24r101goR3jR4:5:3r14oR3jR4:9:2oR3jR4:1:1r60R19oR20R21R22i832R23i828gR24r61gar121hR19oR20R21R22i834R23i828gR24r101goR3jR4:9:2oR3jR4:1:1r60R19oR20R21R22i841R23i837gR24r61gar121hR19oR20R21R22i843R23i837gR24r101gR19oR20R21R22i843R23i828gR24r101gR19oR20R21R22i843R23i810gR24r101ghR19oR20R21R22i844R23i805gR24r101gR19oR20R21R22i844R23i801gR24r101gR19oR20R21R22i844R23i790gR24r124goR3jR4:5:3jR13:20:1r143oR3jR4:1:1oR5r10R7y19:transformedPositionR9jR10:5:2i3r11R12i-98gR19oR20R21R22i870R23i851gR24r190goR3jR4:5:3r14oR3jR4:5:3r14oR3jR4:1:1r9R19oR20R21R22i877R23i874gR24r12goR3jR4:9:2oR3jR4:1:1r23R19oR20R21R22i888R23i880gR24r24gar120hR19oR20R21R22i890R23i880gR24r101gR19oR20R21R22i890R23i874gR24r12goR3jR4:1:1oR5jR6:2:0R7y11:lengthScaleR9r101R12i-100gR19oR20R21R22i904R23i893gR24r101gR19oR20R21R22i904R23i874gR24r12gR19oR20R21R22i904R23i851gR24r190goR3jR4:5:3r58oR3jR4:1:1oR5r10R7y17:transformedNormalR9jR10:5:2i3r11R12i-97gR19oR20R21R22i928R23i911gR24r219goR3jR4:8:2oR3jR4:2:1jR25:31:0R19oR20R21R22i934R23i931gR24jR10:13:1aoR1aoR7y1:_R9r12ghR39r12ghgaoR3jR4:1:1r9R19oR20R21R22i934R23i931gR24r12ghR19oR20R21R22i946R23i931gR24r12gR19oR20R21R22i946R23i911gR24r219ghR19oR20R21R22i953R23i654gR24r56ghR19oR20R21R22i958R23i648gR24r56gR5jy17:hxsl.FunctionKind:2:0y3:refoR5jR6:6:0R7y8:__init__R9jR10:13:1aoR1ahR39r56ghR12i-103gR39r56goR1ahR2oR3jR4:4:1aoR3jR4:5:3jR13:20:1r143oR3jR4:9:2oR3jR4:1:1oR5r10R7y17:projectedPositionR9jR10:5:2i4r11R12i-99gR19oR20R21R22i1005R23i988gR24r260gar120r121hR19oR20R21R22i1008R23i988gR24jR10:5:2i2r11goR3jR4:5:3r14oR3jR4:5:3r14oR3jR4:5:3r14oR3jR4:5:3r14oR3jR4:3:1oR3jR4:5:3r14oR3jR4:9:2oR3jR4:1:1r60R19oR20R21R22i1017R23i1013gR24r61gar121r120hR19oR20R21R22i1020R23i1013gR24jR10:5:2i2r11goR3jR4:8:2oR3jR4:2:1jR25:38:0R19oR20R21R22i1027R23i1023gR24jR10:13:1ahgaoR3jR4:0:1jR36:3:1i1R19oR20R21R22i1029R23i1028gR24r101goR3jR4:0:1jR36:3:1i-1R19oR20R21R22i1032R23i1030gR24r101ghR19oR20R21R22i1033R23i1023gR24jR10:5:2i2r11gR19oR20R21R22i1033R23i1013gR24jR10:5:2i2r11gR19oR20R21R22i1034R23i1012gR24r302goR3jR4:3:1oR3jR4:5:3jR13:3:0oR3jR4:9:2oR3jR4:1:1r23R19oR20R21R22i1046R23i1038gR24r24gar121hR19oR20R21R22i1048R23i1038gR24r101goR3jR4:0:1jR36:3:1d0.5R19oR20R21R22i1054R23i1051gR24r101gR19oR20R21R22i1054R23i1038gR24r101gR19oR20R21R22i1055R23i1037gR24r101gR19oR20R21R22i1055R23i1012gR24r302goR3jR4:9:2oR3jR4:1:1r259R19oR20R21R22i1075R23i1058gR24r260gajR37:2:0hR19oR20R21R22i1077R23i1058gR24r101gR19oR20R21R22i1077R23i1012gR24r302goR3jR4:1:1r42R19oR20R21R22i1096R23i1080gR24r43gR19oR20R21R22i1096R23i1012gR24jR10:5:2i2r11goR3jR4:1:1oR5r209R7y5:widthR9r101R12i-101gR19oR20R21R22i1104R23i1099gR24r101gR19oR20R21R22i1104R23i1012gR24r340gR19oR20R21R22i1104R23i988gR24r266ghR19oR20R21R22i1110R23i982gR24r56gR5jR44:0:0R45oR5r246R7y6:vertexR9jR10:13:1aoR1ahR39r56ghR12i-104gR39r56ghR7y21:h3d.shader.LineShadery4:varsar259r352r218r245r208r60r86oR5jR6:5:0R7y6:outputR9jR10:12:1aoR5r359R7R17R9jR10:5:2i4r11R15r358R12i-96ghR12i-95gr40r19r189r342hg";
-h3d_shader_Shadow.SRC = "oy4:funsaoy4:argsahy4:exproy1:ejy13:hxsl.TExprDef:4:1aoR3jR4:10:3oR3jR4:6:2jy15:haxe.macro.Unop:2:0oR3jR4:1:1oy4:kindjy12:hxsl.VarKind:2:0y4:namey8:perPixely4:typejy9:hxsl.Type:2:0y10:qualifiersajy17:hxsl.VarQualifier:0:1nhy2:idi-228gy1:poy4:filey97:D%3A%5CNeelts%5CPrograms%5CDev%5CHaxe%5Chaxe%5Clib%5Cheaps%2F0%2C9%2C0%2Fh3d%2Fshader%2FShadow.hxy3:maxi416y3:mini408gy1:tr12gR15oR16R17R18i416R19i407gR20r12goR3jR4:5:3jy16:haxe.macro.Binop:4:0oR3jR4:1:1oR6jR7:3:0R8y9:shadowPosR10jR11:5:2i3jy12:hxsl.VecType:1:0R12ajR13:1:0hR14i-227gR15oR16R17R18i428R19i419gR20r25goR3jR4:5:3jR21:0:0oR3jR4:5:3jR21:1:0oR3jR4:5:3r33oR3jR4:1:1oR6jR7:4:0R8y19:transformedPositionR10jR11:5:2i3r24R14i-225gR15oR16R17R18i450R19i431gR20r38goR3jR4:1:1oR6jR7:0:0R8y4:projR10jR11:8:0y6:parentoR6r43R8y6:shadowR10jR11:12:1aoR6r43R8y3:mapR10jR11:10:0R26r45R14i-219gr42oR6r43R8y5:colorR10jR11:5:2i3r24R26r45R14i-221goR6r43R8y5:powerR10jR11:3:0R26r45R14i-222goR6r43R8y4:biasR10r52R26r45R14i-223ghR14i-218gR14i-220gR15oR16R17R18i464R19i453gR20r44gR15oR16R17R18i464R19i431gR20jR11:5:2i3r24goR3jR4:8:2oR3jR4:2:1jy12:hxsl.TGlobal:39:0R15oR16R17R18i471R19i467gR20jR11:13:1ahgaoR3jR4:0:1jy10:hxsl.Const:3:1d0.5R15oR16R17R18i475R19i472gR20r52goR3jR4:0:1jR33:3:1d-0.5R15oR16R17R18i481R19i477gR20r52goR3jR4:0:1jR33:3:1i1R15oR16R17R18i484R19i483gR20r52ghR15oR16R17R18i485R19i467gR20jR11:5:2i3r24gR15oR16R17R18i485R19i431gR20jR11:5:2i3r24goR3jR4:8:2oR3jR4:2:1r62R15oR16R17R18i492R19i488gR20r66gaoR3jR4:0:1jR33:3:1d0.5R15oR16R17R18i496R19i493gR20r52goR3jR4:0:1jR33:3:1d0.5R15oR16R17R18i501R19i498gR20r52goR3jR4:0:1jR33:3:1zR15oR16R17R18i504R19i503gR20r52ghR15oR16R17R18i505R19i488gR20jR11:5:2i3r24gR15oR16R17R18i505R19i431gR20jR11:5:2i3r24gR15oR16R17R18i505R19i419gR20r25gnR15oR16R17R18i505R19i403gR20jR11:0:0ghR15oR16R17R18i511R19i397gR20r113gR6jy17:hxsl.FunctionKind:0:0y3:refoR6jR7:6:0R8y6:vertexR10jR11:13:1aoR1ahy3:retr113ghR14i-229gR37r113goR1ahR2oR3jR4:4:1aoR3jR4:7:2oR6r37R8R22R10jR11:5:2i3r24R14i-231goR3jR4:10:3oR3jR4:1:1r10R15oR16R17R18i573R19i565gR20r12goR3jR4:5:3r31oR3jR4:5:3r33oR3jR4:5:3r33oR3jR4:1:1oR6r37R8y24:pixelTransformedPositionR10jR11:5:2i3r24R14i-226gR15oR16R17R18i600R19i576gR20r139goR3jR4:1:1r42R15oR16R17R18i614R19i603gR20r44gR15oR16R17R18i614R19i576gR20r59goR3jR4:8:2oR3jR4:2:1r62R15oR16R17R18i621R19i617gR20r66gaoR3jR4:0:1jR33:3:1d0.5R15oR16R17R18i625R19i622gR20r52goR3jR4:0:1jR33:3:1d-0.5R15oR16R17R18i631R19i627gR20r52goR3jR4:0:1jR33:3:1i1R15oR16R17R18i634R19i633gR20r52ghR15oR16R17R18i635R19i617gR20jR11:5:2i3r24gR15oR16R17R18i635R19i576gR20jR11:5:2i3r24goR3jR4:8:2oR3jR4:2:1r62R15oR16R17R18i642R19i638gR20r66gaoR3jR4:0:1jR33:3:1d0.5R15oR16R17R18i646R19i643gR20r52goR3jR4:0:1jR33:3:1d0.5R15oR16R17R18i651R19i648gR20r52goR3jR4:0:1jR33:3:1zR15oR16R17R18i654R19i653gR20r52ghR15oR16R17R18i655R19i638gR20jR11:5:2i3r24gR15oR16R17R18i655R19i576gR20r129goR3jR4:1:1r22R15oR16R17R18i670R19i661gR20r25gR15oR16R17R18i670R19i561gR20r129gR15oR16R17R18i671R19i545gR20r113goR3jR4:7:2oR6r37R8y5:depthR10r52R14i-232goR3jR4:8:2oR3jR4:2:1jR32:53:0R15oR16R17R18i696R19i690gR20jR11:13:1aoR1aoR8y5:valueR10jR11:5:2i4r24ghR37r52ghgaoR3jR4:8:2oR3jR4:2:1jR32:33:0R15oR16R17R18i707R19i697gR20jR11:13:1aoR1aoR8y1:_R10r48goR8y2:uvR10jR11:5:2i2r24ghR37jR11:5:2i4r24ghgaoR3jR4:1:1r47R15oR16R17R18i707R19i697gR20r48goR3jR4:9:2oR3jR4:1:1r128R15oR16R17R18i721R19i712gR20r129gajy14:hxsl.Component:0:0jR43:1:0hR15oR16R17R18i724R19i712gR20jR11:5:2i2r24ghR15oR16R17R18i725R19i697gR20r224ghR15oR16R17R18i726R19i690gR20r52gR15oR16R17R18i727R19i678gR20r113goR3jR4:7:2oR6r37R8y4:zMaxR10r52R14i-233goR3jR4:8:2oR3jR4:2:1jR32:51:0R15oR16R17R18i919R19i908gR20jR11:13:1aoR1aoR8R41R10r52ghR37r52ghgaoR3jR4:9:2oR3jR4:1:1r128R15oR16R17R18i917R19i908gR20r129gajR43:2:0hR15oR16R17R18i919R19i908gR20r52ghR15oR16R17R18i930R19i908gR20r52gR15oR16R17R18i931R19i897gR20r113goR3jR4:7:2oR6r37R8y5:deltaR10r52R14i-234goR3jR4:5:3jR21:3:0oR3jR4:8:2oR3jR4:2:1jR32:21:0R15oR16R17R18i969R19i948gR20jR11:13:1aoR1aoR8R41R10r52goR8y1:bR10r52ghR37r52ghgaoR3jR4:3:1oR3jR4:5:3r31oR3jR4:1:1r200R15oR16R17R18i954R19i949gR20r52goR3jR4:1:1r53R15oR16R17R18i968R19i957gR20r52gR15oR16R17R18i968R19i949gR20r52gR15oR16R17R18i969R19i948gR20r52goR3jR4:1:1r247R15oR16R17R18i978R19i974gR20r52ghR15oR16R17R18i979R19i948gR20r52goR3jR4:1:1r247R15oR16R17R18i986R19i982gR20r52gR15oR16R17R18i986R19i948gR20r52gR15oR16R17R18i987R19i936gR20r113goR3jR4:7:2oR6r37R8y5:shadeR10r52R14i-235goR3jR4:8:2oR3jR4:2:1r250R15oR16R17R18i1032R19i1004gR20jR11:13:1aoR1aoR8R41R10r52ghR37r52ghgaoR3jR4:8:2oR3jR4:2:1jR32:9:0R15oR16R17R18i1007R19i1004gR20jR11:13:1aoR1aoR8R40R10r52ghR37r52ghgaoR3jR4:5:3r33oR3jR4:1:1r51R15oR16R17R18i1021R19i1009gR20r52goR3jR4:1:1r272R15oR16R17R18i1029R19i1024gR20r52gR15oR16R17R18i1029R19i1009gR20r52ghR15oR16R17R18i1032R19i1004gR20r52ghR15oR16R17R18i1043R19i1004gR20r52gR15oR16R17R18i1044R19i992gR20r113goR3jR4:5:3jR21:20:1r33oR3jR4:9:2oR3jR4:1:1oR6r37R8y10:pixelColorR10jR11:5:2i4r24R14i-224gR15oR16R17R18i1059R19i1049gR20r354gar235r236r264hR15oR16R17R18i1063R19i1049gR20jR11:5:2i3r24goR3jR4:5:3r31oR3jR4:5:3r33oR3jR4:3:1oR3jR4:5:3r274oR3jR4:0:1jR33:3:1i1R15oR16R17R18i1069R19i1068gR20r52goR3jR4:1:1r312R15oR16R17R18i1077R19i1072gR20r52gR15oR16R17R18i1077R19i1068gR20r52gR15oR16R17R18i1078R19i1067gR20r52goR3jR4:9:2oR3jR4:1:1r49R15oR16R17R18i1093R19i1081gR20r50gar235r236r264hR15oR16R17R18i1097R19i1081gR20jR11:5:2i3r24gR15oR16R17R18i1097R19i1067gR20r383goR3jR4:1:1r312R15oR16R17R18i1105R19i1100gR20r52gR15oR16R17R18i1105R19i1067gR20r383gR15oR16R17R18i1105R19i1049gR20r360ghR15oR16R17R18i1111R19i537gR20r113gR6jR34:1:0R35oR6r118R8y8:fragmentR10jR11:13:1aoR1ahR37r113ghR14i-230gR37r113ghR8y17:h3d.shader.Shadowy4:varsar117r396r45r22r36r353r138r10hg";
+h3d_shader_Shadow.SRC = "oy4:funsaoy4:argsahy4:exproy1:ejy13:hxsl.TExprDef:4:1aoR3jR4:10:3oR3jR4:6:2jy15:haxe.macro.Unop:2:0oR3jR4:1:1oy4:kindjy12:hxsl.VarKind:2:0y4:namey8:perPixely4:typejy9:hxsl.Type:2:0y10:qualifiersajy17:hxsl.VarQualifier:0:1nhy2:idi-208gy1:poy4:filey97:D%3A%5CNeelts%5CPrograms%5CDev%5CHaxe%5Chaxe%5Clib%5Cheaps%2F0%2C9%2C0%2Fh3d%2Fshader%2FShadow.hxy3:maxi416y3:mini408gy1:tr12gR15oR16R17R18i416R19i407gR20r12goR3jR4:5:3jy16:haxe.macro.Binop:4:0oR3jR4:1:1oR6jR7:3:0R8y9:shadowPosR10jR11:5:2i3jy12:hxsl.VecType:1:0R12ajR13:1:0hR14i-207gR15oR16R17R18i428R19i419gR20r25goR3jR4:5:3jR21:0:0oR3jR4:5:3jR21:1:0oR3jR4:5:3r33oR3jR4:1:1oR6jR7:4:0R8y19:transformedPositionR10jR11:5:2i3r24R14i-205gR15oR16R17R18i450R19i431gR20r38goR3jR4:1:1oR6jR7:0:0R8y4:projR10jR11:8:0y6:parentoR6r43R8y6:shadowR10jR11:12:1aoR6r43R8y3:mapR10jR11:10:0R26r45R14i-199gr42oR6r43R8y5:colorR10jR11:5:2i3r24R26r45R14i-201goR6r43R8y5:powerR10jR11:3:0R26r45R14i-202goR6r43R8y4:biasR10r52R26r45R14i-203ghR14i-198gR14i-200gR15oR16R17R18i464R19i453gR20r44gR15oR16R17R18i464R19i431gR20jR11:5:2i3r24goR3jR4:8:2oR3jR4:2:1jy12:hxsl.TGlobal:39:0R15oR16R17R18i471R19i467gR20jR11:13:1ahgaoR3jR4:0:1jy10:hxsl.Const:3:1d0.5R15oR16R17R18i475R19i472gR20r52goR3jR4:0:1jR33:3:1d-0.5R15oR16R17R18i481R19i477gR20r52goR3jR4:0:1jR33:3:1i1R15oR16R17R18i484R19i483gR20r52ghR15oR16R17R18i485R19i467gR20jR11:5:2i3r24gR15oR16R17R18i485R19i431gR20jR11:5:2i3r24goR3jR4:8:2oR3jR4:2:1r62R15oR16R17R18i492R19i488gR20r66gaoR3jR4:0:1jR33:3:1d0.5R15oR16R17R18i496R19i493gR20r52goR3jR4:0:1jR33:3:1d0.5R15oR16R17R18i501R19i498gR20r52goR3jR4:0:1jR33:3:1zR15oR16R17R18i504R19i503gR20r52ghR15oR16R17R18i505R19i488gR20jR11:5:2i3r24gR15oR16R17R18i505R19i431gR20jR11:5:2i3r24gR15oR16R17R18i505R19i419gR20r25gnR15oR16R17R18i505R19i403gR20jR11:0:0ghR15oR16R17R18i511R19i397gR20r113gR6jy17:hxsl.FunctionKind:0:0y3:refoR6jR7:6:0R8y6:vertexR10jR11:13:1aoR1ahy3:retr113ghR14i-209gR37r113goR1ahR2oR3jR4:4:1aoR3jR4:7:2oR6r37R8R22R10jR11:5:2i3r24R14i-211goR3jR4:10:3oR3jR4:1:1r10R15oR16R17R18i573R19i565gR20r12goR3jR4:5:3r31oR3jR4:5:3r33oR3jR4:5:3r33oR3jR4:1:1oR6r37R8y24:pixelTransformedPositionR10jR11:5:2i3r24R14i-206gR15oR16R17R18i600R19i576gR20r139goR3jR4:1:1r42R15oR16R17R18i614R19i603gR20r44gR15oR16R17R18i614R19i576gR20r59goR3jR4:8:2oR3jR4:2:1r62R15oR16R17R18i621R19i617gR20r66gaoR3jR4:0:1jR33:3:1d0.5R15oR16R17R18i625R19i622gR20r52goR3jR4:0:1jR33:3:1d-0.5R15oR16R17R18i631R19i627gR20r52goR3jR4:0:1jR33:3:1i1R15oR16R17R18i634R19i633gR20r52ghR15oR16R17R18i635R19i617gR20jR11:5:2i3r24gR15oR16R17R18i635R19i576gR20jR11:5:2i3r24goR3jR4:8:2oR3jR4:2:1r62R15oR16R17R18i642R19i638gR20r66gaoR3jR4:0:1jR33:3:1d0.5R15oR16R17R18i646R19i643gR20r52goR3jR4:0:1jR33:3:1d0.5R15oR16R17R18i651R19i648gR20r52goR3jR4:0:1jR33:3:1zR15oR16R17R18i654R19i653gR20r52ghR15oR16R17R18i655R19i638gR20jR11:5:2i3r24gR15oR16R17R18i655R19i576gR20r129goR3jR4:1:1r22R15oR16R17R18i670R19i661gR20r25gR15oR16R17R18i670R19i561gR20r129gR15oR16R17R18i671R19i545gR20r113goR3jR4:7:2oR6r37R8y5:depthR10r52R14i-212goR3jR4:8:2oR3jR4:2:1jR32:53:0R15oR16R17R18i696R19i690gR20jR11:13:1aoR1aoR8y5:valueR10jR11:5:2i4r24ghR37r52ghgaoR3jR4:8:2oR3jR4:2:1jR32:33:0R15oR16R17R18i707R19i697gR20jR11:13:1aoR1aoR8y1:_R10r48goR8y2:uvR10jR11:5:2i2r24ghR37jR11:5:2i4r24ghgaoR3jR4:1:1r47R15oR16R17R18i707R19i697gR20r48goR3jR4:9:2oR3jR4:1:1r128R15oR16R17R18i721R19i712gR20r129gajy14:hxsl.Component:0:0jR43:1:0hR15oR16R17R18i724R19i712gR20jR11:5:2i2r24ghR15oR16R17R18i725R19i697gR20r224ghR15oR16R17R18i726R19i690gR20r52gR15oR16R17R18i727R19i678gR20r113goR3jR4:7:2oR6r37R8y4:zMaxR10r52R14i-213goR3jR4:8:2oR3jR4:2:1jR32:51:0R15oR16R17R18i919R19i908gR20jR11:13:1aoR1aoR8R41R10r52ghR37r52ghgaoR3jR4:9:2oR3jR4:1:1r128R15oR16R17R18i917R19i908gR20r129gajR43:2:0hR15oR16R17R18i919R19i908gR20r52ghR15oR16R17R18i930R19i908gR20r52gR15oR16R17R18i931R19i897gR20r113goR3jR4:7:2oR6r37R8y5:deltaR10r52R14i-214goR3jR4:5:3jR21:3:0oR3jR4:8:2oR3jR4:2:1jR32:21:0R15oR16R17R18i969R19i948gR20jR11:13:1aoR1aoR8R41R10r52goR8y1:bR10r52ghR37r52ghgaoR3jR4:3:1oR3jR4:5:3r31oR3jR4:1:1r200R15oR16R17R18i954R19i949gR20r52goR3jR4:1:1r53R15oR16R17R18i968R19i957gR20r52gR15oR16R17R18i968R19i949gR20r52gR15oR16R17R18i969R19i948gR20r52goR3jR4:1:1r247R15oR16R17R18i978R19i974gR20r52ghR15oR16R17R18i979R19i948gR20r52goR3jR4:1:1r247R15oR16R17R18i986R19i982gR20r52gR15oR16R17R18i986R19i948gR20r52gR15oR16R17R18i987R19i936gR20r113goR3jR4:7:2oR6r37R8y5:shadeR10r52R14i-215goR3jR4:8:2oR3jR4:2:1r250R15oR16R17R18i1032R19i1004gR20jR11:13:1aoR1aoR8R41R10r52ghR37r52ghgaoR3jR4:8:2oR3jR4:2:1jR32:9:0R15oR16R17R18i1007R19i1004gR20jR11:13:1aoR1aoR8R40R10r52ghR37r52ghgaoR3jR4:5:3r33oR3jR4:1:1r51R15oR16R17R18i1021R19i1009gR20r52goR3jR4:1:1r272R15oR16R17R18i1029R19i1024gR20r52gR15oR16R17R18i1029R19i1009gR20r52ghR15oR16R17R18i1032R19i1004gR20r52ghR15oR16R17R18i1043R19i1004gR20r52gR15oR16R17R18i1044R19i992gR20r113goR3jR4:5:3jR21:20:1r33oR3jR4:9:2oR3jR4:1:1oR6r37R8y10:pixelColorR10jR11:5:2i4r24R14i-204gR15oR16R17R18i1059R19i1049gR20r354gar235r236r264hR15oR16R17R18i1063R19i1049gR20jR11:5:2i3r24goR3jR4:5:3r31oR3jR4:5:3r33oR3jR4:3:1oR3jR4:5:3r274oR3jR4:0:1jR33:3:1i1R15oR16R17R18i1069R19i1068gR20r52goR3jR4:1:1r312R15oR16R17R18i1077R19i1072gR20r52gR15oR16R17R18i1077R19i1068gR20r52gR15oR16R17R18i1078R19i1067gR20r52goR3jR4:9:2oR3jR4:1:1r49R15oR16R17R18i1093R19i1081gR20r50gar235r236r264hR15oR16R17R18i1097R19i1081gR20jR11:5:2i3r24gR15oR16R17R18i1097R19i1067gR20r383goR3jR4:1:1r312R15oR16R17R18i1105R19i1100gR20r52gR15oR16R17R18i1105R19i1067gR20r383gR15oR16R17R18i1105R19i1049gR20r360ghR15oR16R17R18i1111R19i537gR20r113gR6jR34:1:0R35oR6r118R8y8:fragmentR10jR11:13:1aoR1ahR37r113ghR14i-210gR37r113ghR8y17:h3d.shader.Shadowy4:varsar117r396r45r22r36r353r138r10hg";
 h3d_shader_Skin.SRC = "oy4:funsaoy4:argsahy4:exproy1:ejy13:hxsl.TExprDef:4:1aoR3jR4:5:3jy16:haxe.macro.Binop:4:0oR3jR4:1:1oy4:kindjy12:hxsl.VarKind:4:0y4:namey19:transformedPositiony4:typejy9:hxsl.Type:5:2i3jy12:hxsl.VecType:1:0y2:idi-112gy1:poy4:filey95:D%3A%5CNeelts%5CPrograms%5CDev%5CHaxe%5Chaxe%5Clib%5Cheaps%2F0%2C9%2C0%2Fh3d%2Fshader%2FSkin.hxy3:maxi538y3:mini519gy1:tr12goR3jR4:5:3jR5:0:0oR3jR4:5:3r16oR3jR4:5:3jR5:1:0oR3jR4:3:1oR3jR4:5:3r19oR3jR4:1:1oR6r10R8y16:relativePositionR10jR11:5:2i3r11R13i-111gR14oR15R16R17i563R18i547gR19r24goR3jR4:16:2oR3jR4:1:1oR6jR7:2:0R8y13:bonesMatrixesR10jR11:14:2jR11:8:0jy13:hxsl.SizeDecl:1:1oR6r30R8y8:MaxBonesR10jR11:1:0y10:qualifiersajy17:hxsl.VarQualifier:0:1nhR13i-114gR13i-115gR14oR15R16R17i579R18i566gR19r37goR3jR4:9:2oR3jR4:1:1oR6jR7:1:0R8y7:indexesR10jR11:9:1i4y6:parentoR6r43R8y5:inputR10jR11:12:1aoR6r43R8y8:positionR10jR11:5:2i3r11R27r45R13i-107goR6r43R8y6:normalR10jR11:5:2i3r11R27r45R13i-108goR6r43R8y7:weightsR10jR11:5:2i3r11R27r45R13i-109gr42hR13i-106gR13i-110gR14oR15R16R17i593R18i580gR19r44gajy14:hxsl.Component:0:0hR14oR15R16R17i595R18i580gR19r33gR14oR15R16R17i596R18i566gR19r31gR14oR15R16R17i596R18i547gR19jR11:5:2i3r11gR14oR15R16R17i597R18i546gR19r64goR3jR4:9:2oR3jR4:1:1r51R14oR15R16R17i613R18i600gR19r52gar57hR14oR15R16R17i615R18i600gR19jR11:3:0gR14oR15R16R17i615R18i546gR19r64goR3jR4:5:3r19oR3jR4:3:1oR3jR4:5:3r19oR3jR4:1:1r23R14oR15R16R17i640R18i624gR19r24goR3jR4:16:2oR3jR4:1:1r29R14oR15R16R17i656R18i643gR19r37goR3jR4:9:2oR3jR4:1:1r42R14oR15R16R17i670R18i657gR19r44gajR32:1:0hR14oR15R16R17i672R18i657gR19r33gR14oR15R16R17i673R18i643gR19r31gR14oR15R16R17i673R18i624gR19r64gR14oR15R16R17i674R18i623gR19r64goR3jR4:9:2oR3jR4:1:1r51R14oR15R16R17i690R18i677gR19r52gar92hR14oR15R16R17i692R18i677gR19r74gR14oR15R16R17i692R18i623gR19r64gR14oR15R16R17i692R18i546gR19jR11:5:2i3r11goR3jR4:5:3r19oR3jR4:3:1oR3jR4:5:3r19oR3jR4:1:1r23R14oR15R16R17i717R18i701gR19r24goR3jR4:16:2oR3jR4:1:1r29R14oR15R16R17i733R18i720gR19r37goR3jR4:9:2oR3jR4:1:1r42R14oR15R16R17i747R18i734gR19r44gajR32:2:0hR14oR15R16R17i749R18i734gR19r33gR14oR15R16R17i750R18i720gR19r31gR14oR15R16R17i750R18i701gR19r64gR14oR15R16R17i751R18i700gR19r64goR3jR4:9:2oR3jR4:1:1r51R14oR15R16R17i767R18i754gR19r52gar128hR14oR15R16R17i769R18i754gR19r74gR14oR15R16R17i769R18i700gR19r64gR14oR15R16R17i769R18i546gR19jR11:5:2i3r11gR14oR15R16R17i769R18i519gR19r12goR3jR4:5:3r7oR3jR4:1:1oR6r10R8y17:transformedNormalR10jR11:5:2i3r11R13i-113gR14oR15R16R17i792R18i775gR19r154goR3jR4:8:2oR3jR4:2:1jy12:hxsl.TGlobal:31:0R14oR15R16R17i804R18i795gR19jR11:13:1aoR1aoR8y5:valueR10r64ghy3:retr64ghgaoR3jR4:5:3r16oR3jR4:5:3r16oR3jR4:5:3r19oR3jR4:3:1oR3jR4:5:3r19oR3jR4:1:1r49R14oR15R16R17i824R18i812gR19r50goR3jR4:8:2oR3jR4:2:1jR34:48:0R14oR15R16R17i831R18i827gR19jR11:13:1ahgaoR3jR4:16:2oR3jR4:1:1r29R14oR15R16R17i845R18i832gR19r37goR3jR4:9:2oR3jR4:1:1r42R14oR15R16R17i859R18i846gR19r44gar57hR14oR15R16R17i861R18i846gR19r33gR14oR15R16R17i862R18i832gR19r31ghR14oR15R16R17i863R18i827gR19jR11:6:0gR14oR15R16R17i863R18i812gR19r64gR14oR15R16R17i864R18i811gR19r64goR3jR4:9:2oR3jR4:1:1r51R14oR15R16R17i880R18i867gR19r52gar57hR14oR15R16R17i882R18i867gR19r74gR14oR15R16R17i882R18i811gR19r64goR3jR4:5:3r19oR3jR4:3:1oR3jR4:5:3r19oR3jR4:1:1r49R14oR15R16R17i903R18i891gR19r50goR3jR4:8:2oR3jR4:2:1r178R14oR15R16R17i910R18i906gR19r182gaoR3jR4:16:2oR3jR4:1:1r29R14oR15R16R17i924R18i911gR19r37goR3jR4:9:2oR3jR4:1:1r42R14oR15R16R17i938R18i925gR19r44gar92hR14oR15R16R17i940R18i925gR19r33gR14oR15R16R17i941R18i911gR19r31ghR14oR15R16R17i942R18i906gR19r199gR14oR15R16R17i942R18i891gR19r64gR14oR15R16R17i943R18i890gR19r64goR3jR4:9:2oR3jR4:1:1r51R14oR15R16R17i959R18i946gR19r52gar92hR14oR15R16R17i961R18i946gR19r74gR14oR15R16R17i961R18i890gR19r64gR14oR15R16R17i961R18i811gR19jR11:5:2i3r11goR3jR4:5:3r19oR3jR4:3:1oR3jR4:5:3r19oR3jR4:1:1r49R14oR15R16R17i982R18i970gR19r50goR3jR4:8:2oR3jR4:2:1r178R14oR15R16R17i989R18i985gR19r182gaoR3jR4:16:2oR3jR4:1:1r29R14oR15R16R17i1003R18i990gR19r37goR3jR4:9:2oR3jR4:1:1r42R14oR15R16R17i1017R18i1004gR19r44gar128hR14oR15R16R17i1019R18i1004gR19r33gR14oR15R16R17i1020R18i990gR19r31ghR14oR15R16R17i1021R18i985gR19r199gR14oR15R16R17i1021R18i970gR19r64gR14oR15R16R17i1022R18i969gR19r64goR3jR4:9:2oR3jR4:1:1r51R14oR15R16R17i1038R18i1025gR19r52gar128hR14oR15R16R17i1040R18i1025gR19r74gR14oR15R16R17i1040R18i969gR19r64gR14oR15R16R17i1040R18i811gR19jR11:5:2i3r11ghR14oR15R16R17i1041R18i795gR19r64gR14oR15R16R17i1041R18i775gR19r154ghR14oR15R16R17i1056R18i420gR19jR11:0:0gR6jy17:hxsl.FunctionKind:0:0y3:refoR6jR7:6:0R8y6:vertexR10jR11:13:1aoR1ahR36r303ghR13i-116gR36r303ghR8y15:h3d.shader.Skiny4:varsar305r153r29r23r45r9r32hg";
 h3d_shader_SpecularTexture.SRC = "oy4:funsaoy4:argsahy4:exproy1:ejy13:hxsl.TExprDef:4:1aoR3jR4:5:3jy16:haxe.macro.Binop:20:1jR5:1:0oR3jR4:1:1oy4:kindjy12:hxsl.VarKind:4:0y4:namey9:specColory4:typejy9:hxsl.Type:5:2i3jy12:hxsl.VecType:1:0y2:idi-28gy1:poy4:filey106:D%3A%5CNeelts%5CPrograms%5CDev%5CHaxe%5Chaxe%5Clib%5Cheaps%2F0%2C9%2C0%2Fh3d%2Fshader%2FSpecularTexture.hxy3:maxi218y3:mini209gy1:tr13goR3jR4:9:2oR3jR4:8:2oR3jR4:2:1jy12:hxsl.TGlobal:33:0R14oR15R16R17i229R18i222gR19jR11:13:1aoR1aoR8y1:_R10jR11:10:0goR8y2:uvR10jR11:5:2i2r12ghy3:retjR11:5:2i4r12ghgaoR3jR4:1:1oR6jR7:2:0R8y7:textureR10r26R13i-26gR14oR15R16R17i229R18i222gR19r26goR3jR4:1:1oR6r11R8y12:calculatedUVR10jR11:5:2i2r12R13i-27gR14oR15R16R17i246R18i234gR19r39ghR14oR15R16R17i247R18i222gR19r29gajy14:hxsl.Component:0:0jR26:1:0jR26:2:0hR14oR15R16R17i251R18i222gR19jR11:5:2i3r12gR14oR15R16R17i251R18i209gR19r13ghR14oR15R16R17i257R18i203gR19jR11:0:0gR6jy17:hxsl.FunctionKind:1:0y3:refoR6jR7:6:0R8y8:fragmentR10jR11:13:1aoR1ahR23r55ghR13i-29gR23r55ghR8y26:h3d.shader.SpecularTexturey4:varsar38r10r57r33hg";
 h3d_shader_Texture.SRC = "oy4:funsaoy4:argsahy4:exproy1:ejy13:hxsl.TExprDef:4:1aoR3jR4:5:3jy16:haxe.macro.Binop:4:0oR3jR4:1:1oy4:kindjy12:hxsl.VarKind:4:0y4:namey12:calculatedUVy4:typejy9:hxsl.Type:5:2i2jy12:hxsl.VecType:1:0y2:idi-37gy1:poy4:filey98:D%3A%5CNeelts%5CPrograms%5CDev%5CHaxe%5Chaxe%5Clib%5Cheaps%2F0%2C9%2C0%2Fh3d%2Fshader%2FTexture.hxy3:maxi443y3:mini431gy1:tr12goR3jR4:1:1oR6jR7:1:0R8y2:uvR10jR11:5:2i2r11y6:parentoR6r17R8y5:inputR10jR11:12:1ar16hR13i-30gR13i-31gR14oR15R16R17i454R18i446gR19r18gR14oR15R16R17i454R18i431gR19r12ghR14oR15R16R17i460R18i425gR19jR11:0:0gR6jy17:hxsl.FunctionKind:0:0y3:refoR6jR7:6:0R8y6:vertexR10jR11:13:1aoR1ahy3:retr28ghR13i-40gR26r28goR1ahR2oR3jR4:4:1aoR3jR4:7:2oR6r10R8y1:cR10jR11:5:2i4r11R13i-42goR3jR4:8:2oR3jR4:2:1jy12:hxsl.TGlobal:33:0R14oR15R16R17i507R18i500gR19jR11:13:1aoR1aoR8y1:_R10jR11:10:0goR8R20R10jR11:5:2i2r11ghR26r42ghgaoR3jR4:1:1oR6jR7:2:0R8y7:textureR10r52R13i-36gR14oR15R16R17i507R18i500gR19r52goR3jR4:1:1r9R14oR15R16R17i524R18i512gR19r12ghR14oR15R16R17i525R18i500gR19r42gR14oR15R16R17i526R18i492gR19r28goR3jR4:10:3oR3jR4:5:3jR5:14:0oR3jR4:1:1oR6r59R8y9:killAlphaR10jR11:2:0y10:qualifiersajy17:hxsl.VarQualifier:0:1nhR13i-33gR14oR15R16R17i544R18i535gR19r74goR3jR4:5:3jR5:9:0oR3jR4:5:3jR5:3:0oR3jR4:9:2oR3jR4:1:1r41R14oR15R16R17i549R18i548gR19r42gajy14:hxsl.Component:3:0hR14oR15R16R17i551R18i548gR19jR11:3:0goR3jR4:1:1oR6r59R8y18:killAlphaThresholdR10r91R32ajR33:7:2d0d1hR13i-35gR14oR15R16R17i572R18i554gR19r91gR14oR15R16R17i572R18i548gR19r91goR3jR4:0:1jy10:hxsl.Const:3:1zR14oR15R16R17i576R18i575gR19r91gR14oR15R16R17i576R18i548gR19r74gR14oR15R16R17i576R18i535gR19r74goR3jR4:11:0R14oR15R16R17i586R18i579gR19r28gnR14oR15R16R17i586R18i531gR19r28goR3jR4:10:3oR3jR4:1:1oR6r59R8y8:additiveR10r74R32ajR33:0:1nhR13i-32gR14oR15R16R17i604R18i596gR19r74goR3jR4:5:3jR5:20:1jR5:0:0oR3jR4:1:1oR6r10R8y10:pixelColorR10jR11:5:2i4r11R13i-38gR14oR15R16R17i622R18i612gR19r125goR3jR4:1:1r41R14oR15R16R17i627R18i626gR19r42gR14oR15R16R17i627R18i612gR19r125goR3jR4:5:3jR5:20:1jR5:1:0oR3jR4:1:1r124R14oR15R16R17i653R18i643gR19r125goR3jR4:1:1r41R14oR15R16R17i658R18i657gR19r42gR14oR15R16R17i658R18i643gR19r125gR14oR15R16R17i658R18i592gR19r28goR3jR4:10:3oR3jR4:1:1oR6r59R8y13:specularAlphaR10r74R32ajR33:0:1nhR13i-34gR14oR15R16R17i681R18i668gR19r74goR3jR4:5:3jR5:20:1r134oR3jR4:1:1oR6r10R8y9:specColorR10jR11:5:2i3r11R13i-39gR14oR15R16R17i698R18i689gR19r157goR3jR4:9:2oR3jR4:1:1r41R14oR15R16R17i703R18i702gR19r42gar88r88r88hR14oR15R16R17i707R18i702gR19jR11:5:2i3r11gR14oR15R16R17i707R18i689gR19r157gnR14oR15R16R17i707R18i664gR19r28ghR14oR15R16R17i713R18i486gR19r28gR6jR23:1:0R24oR6r31R8y8:fragmentR10jR11:13:1aoR1ahR26r28ghR13i-41gR26r28ghR8y18:h3d.shader.Texturey4:varsar9r30r156r175r115r58r148r93r19r73r124hg";
-h3d_shader_VertexColorAlpha.SRC = "oy4:funsaoy4:argsahy4:exproy1:ejy13:hxsl.TExprDef:4:1aoR3jR4:10:3oR3jR4:1:1oy4:kindjy12:hxsl.VarKind:2:0y4:namey8:additivey4:typejy9:hxsl.Type:2:0y10:qualifiersajy17:hxsl.VarQualifier:0:1nhy2:idi-311gy1:poy4:filey107:D%3A%5CNeelts%5CPrograms%5CDev%5CHaxe%5Chaxe%5Clib%5Cheaps%2F0%2C9%2C0%2Fh3d%2Fshader%2FVertexColorAlpha.hxy3:maxi245y3:mini237gy1:tr10goR3jR4:5:3jy16:haxe.macro.Binop:20:1jR20:0:0oR3jR4:1:1oR5jR6:4:0R7y10:pixelColorR9jR10:5:2i4jy12:hxsl.VecType:1:0R13i-310gR14oR15R16R17i263R18i253gR19r22goR3jR4:1:1oR5jR6:1:0R7y5:colorR9jR10:5:2i4r21y6:parentoR5r27R7y5:inputR9jR10:12:1ar26hR13i-308gR13i-309gR14oR15R16R17i278R18i267gR19r28gR14oR15R16R17i278R18i253gR19r22goR3jR4:5:3jR20:20:1jR20:1:0oR3jR4:1:1r19R14oR15R16R17i304R18i294gR19r22goR3jR4:1:1r26R14oR15R16R17i319R18i308gR19r28gR14oR15R16R17i319R18i294gR19r22gR14oR15R16R17i319R18i233gR19jR10:0:0ghR14oR15R16R17i325R18i227gR19r49gR5jy17:hxsl.FunctionKind:1:0y3:refoR5jR6:6:0R7y8:fragmentR9jR10:13:1aoR1ahy3:retr49ghR13i-312gR29r49ghR7y27:h3d.shader.VertexColorAlphay4:varsar53r8r29r19hg";
-h3d_shader_VolumeDecal.SRC = "oy4:funsaoy4:argsahy4:exproy1:ejy13:hxsl.TExprDef:4:1aoR3jR4:5:3jy16:haxe.macro.Binop:4:0oR3jR4:1:1oy4:kindjy12:hxsl.VarKind:4:0y4:namey17:transformedNormaly4:typejy9:hxsl.Type:5:2i3jy12:hxsl.VecType:1:0y2:idi-262gy1:poy4:filey102:D%3A%5CNeelts%5CPrograms%5CDev%5CHaxe%5Chaxe%5Clib%5Cheaps%2F0%2C9%2C0%2Fh3d%2Fshader%2FVolumeDecal.hxy3:maxi282y3:mini265gy1:tr12goR3jR4:1:1oR6jR7:2:0R8y6:normalR10jR11:5:2i3r11R13i-275gR14oR15R16R17i291R18i285gR19r18gR14oR15R16R17i291R18i265gR19r12ghR14oR15R16R17i297R18i259gR19jR11:0:0gR6jy17:hxsl.FunctionKind:0:0y3:refoR6jR7:6:0R8y6:vertexR10jR11:13:1aoR1ahy3:retr25ghR13i-277gR24r25goR1ahR2oR3jR4:4:1aoR3jR4:7:2oR6r10R8y6:matrixR10jR11:7:0R13i-279goR3jR4:5:3jR5:1:0oR3jR4:1:1oR6jR7:0:0R8y15:inverseViewProjR10r39y6:parentoR6r44R8y6:cameraR10jR11:12:1aoR6r44R8y4:viewR10r39R27r45R13i-237goR6r44R8y4:projR10r39R27r45R13i-238goR6r44R8y8:positionR10jR11:5:2i3r11R27r45R13i-239goR6r44R8y8:projDiagR10jR11:5:2i3r11R27r45R13i-240goR6r44R8y8:viewProjR10r39R27r45R13i-241gr43oR6r44R8y5:zNearR10jR11:3:0R27r45R13i-243goR6r44R8y4:zFarR10r55R27r45R13i-244goR6jR7:3:0R8y3:dirR10jR11:5:2i3r11R27r45R13i-245ghR13i-236gR13i-242gR14oR15R16R17i364R18i342gR19r39goR3jR4:1:1oR6r44R8y16:modelViewInverseR10r39R27oR6r44R8y6:globalR10jR11:12:1aoR6r44R8y4:timeR10r55R27r65R13i-247goR6r44R8y9:pixelSizeR10jR11:5:2i2r11R27r65R13i-248goR6r44R8y9:modelViewR10r39R27r65y10:qualifiersajy17:hxsl.VarQualifier:3:0hR13i-249gr64hR13i-246gR42ar72hR13i-250gR14oR15R16R17i390R18i367gR19r39gR14oR15R16R17i390R18i342gR19r39gR14oR15R16R17i391R18i329gR19r25goR3jR4:7:2oR6r10R8y9:screenPosR10jR11:5:2i2r11R13i-280goR3jR4:5:3jR5:2:0oR3jR4:9:2oR3jR4:1:1oR6r10R8y17:projectedPositionR10jR11:5:2i4r11R13i-263gR14oR15R16R17i429R18i412gR19r89gajy14:hxsl.Component:0:0jR46:1:0hR14oR15R16R17i432R18i412gR19r83goR3jR4:9:2oR3jR4:1:1r88R14oR15R16R17i452R18i435gR19r89gajR46:3:0hR14oR15R16R17i454R18i435gR19r55gR14oR15R16R17i454R18i412gR19r83gR14oR15R16R17i455R18i396gR19r25goR3jR4:7:2oR6r10R8y3:tuvR10jR11:5:2i2r11R13i-281goR3jR4:5:3jR5:0:0oR3jR4:5:3r41oR3jR4:1:1r82R14oR15R16R17i479R18i470gR19r83goR3jR4:8:2oR3jR4:2:1jy12:hxsl.TGlobal:38:0R14oR15R16R17i486R18i482gR19jR11:13:1ahgaoR3jR4:0:1jy10:hxsl.Const:3:1d0.5R14oR15R16R17i490R18i487gR19r55goR3jR4:0:1jR49:3:1d-0.5R14oR15R16R17i496R18i492gR19r55ghR14oR15R16R17i497R18i482gR19jR11:5:2i2r11gR14oR15R16R17i497R18i470gR19jR11:5:2i2r11goR3jR4:8:2oR3jR4:2:1r120R14oR15R16R17i504R18i500gR19r124gaoR3jR4:0:1jR49:3:1d0.5R14oR15R16R17i508R18i505gR19r55goR3jR4:0:1jR49:3:1d0.5R14oR15R16R17i513R18i510gR19r55ghR14oR15R16R17i514R18i500gR19jR11:5:2i2r11gR14oR15R16R17i514R18i470gR19r111gR14oR15R16R17i515R18i460gR19r25goR3jR4:7:2oR6r10R8y3:ruvR10jR11:5:2i4r11R13i-282goR3jR4:8:2oR3jR4:2:1jR48:40:0R14oR15R16R17i534R18i530gR19jR11:13:1ahgaoR3jR4:1:1r82R14oR15R16R17i550R18i541gR19r83goR3jR4:8:2oR3jR4:2:1jR48:53:0R14oR15R16R17i563R18i557gR19jR11:13:1aoR1aoR8y5:valueR10jR11:5:2i4r11ghR24r55ghgaoR3jR4:8:2oR3jR4:2:1jR48:33:0R14oR15R16R17i572R18i564gR19jR11:13:1aoR1aoR8y1:_R10jR11:10:0goR8y2:uvR10jR11:5:2i2r11ghR24jR11:5:2i4r11ghgaoR3jR4:1:1oR6r44R8y8:depthMapR10r195R13i-273gR14oR15R16R17i572R18i564gR19r195goR3jR4:1:1r110R14oR15R16R17i580R18i577gR19r111ghR14oR15R16R17i581R18i564gR19r198ghR14oR15R16R17i582R18i557gR19r55goR3jR4:0:1jR49:3:1i1R14oR15R16R17i590R18i589gR19r55ghR14oR15R16R17i596R18i530gR19r162gR14oR15R16R17i597R18i520gR19r25goR3jR4:7:2oR6r10R8y4:wposR10r198R13i-283goR3jR4:5:3r41oR3jR4:1:1r161R14oR15R16R17i616R18i613gR19r162goR3jR4:1:1r38R14oR15R16R17i625R18i619gR19r39gR14oR15R16R17i625R18i613gR19r198gR14oR15R16R17i626R18i602gR19r25goR3jR4:7:2oR6r10R8y4:pposR10r198R13i-284goR3jR4:5:3r41oR3jR4:1:1r161R14oR15R16R17i645R18i642gR19r162goR3jR4:1:1r43R14oR15R16R17i670R18i648gR19r39gR14oR15R16R17i670R18i642gR19r198gR14oR15R16R17i671R18i631gR19r25goR3jR4:5:3r7oR3jR4:1:1oR6r10R8y24:pixelTransformedPositionR10jR11:5:2i3r11R13i-261gR14oR15R16R17i700R18i676gR19r249goR3jR4:5:3r85oR3jR4:9:2oR3jR4:1:1r234R14oR15R16R17i707R18i703gR19r198gar93r94jR46:2:0hR14oR15R16R17i711R18i703gR19jR11:5:2i3r11goR3jR4:9:2oR3jR4:1:1r234R14oR15R16R17i718R18i714gR19r198gar102hR14oR15R16R17i720R18i714gR19r55gR14oR15R16R17i720R18i703gR19r261gR14oR15R16R17i720R18i676gR19r249goR3jR4:5:3r7oR3jR4:1:1oR6r10R8y12:calculatedUVR10jR11:5:2i2r11R13i-276gR14oR15R16R17i738R18i726gR19r276goR3jR4:5:3r113oR3jR4:5:3r41oR3jR4:1:1oR6r17R8y5:scaleR10jR11:5:2i2r11R13i-274gR14oR15R16R17i746R18i741gR19r283goR3jR4:3:1oR3jR4:5:3r85oR3jR4:9:2oR3jR4:1:1r221R14oR15R16R17i754R18i750gR19r198gar93r94hR14oR15R16R17i757R18i750gR19jR11:5:2i2r11goR3jR4:9:2oR3jR4:1:1r221R14oR15R16R17i764R18i760gR19r198gar102hR14oR15R16R17i766R18i760gR19r55gR14oR15R16R17i766R18i750gR19r295gR14oR15R16R17i767R18i749gR19r295gR14oR15R16R17i767R18i741gR19jR11:5:2i2r11goR3jR4:0:1jR49:3:1d0.5R14oR15R16R17i773R18i770gR19r55gR14oR15R16R17i773R18i741gR19r309gR14oR15R16R17i773R18i726gR19r276goR3jR4:10:3oR3jR4:5:3jR5:9:0oR3jR4:8:2oR3jR4:2:1jR48:21:0R14oR15R16R17i786R18i783gR19jR11:13:1aoR1aoR8y1:aR10r55goR8y1:bR10r55ghR24r55ghgaoR3jR4:8:2oR3jR4:2:1r323R14oR15R16R17i790R18i787gR19jR11:13:1ar327hgaoR3jR4:9:2oR3jR4:1:1r275R14oR15R16R17i803R18i791gR19r276gar93hR14oR15R16R17i805R18i791gR19r55goR3jR4:9:2oR3jR4:1:1r275R14oR15R16R17i819R18i807gR19r276gar94hR14oR15R16R17i821R18i807gR19r55ghR14oR15R16R17i822R18i787gR19r55goR3jR4:8:2oR3jR4:2:1r323R14oR15R16R17i827R18i824gR19jR11:13:1ar327hgaoR3jR4:5:3jR5:3:0oR3jR4:0:1jR49:3:1i1R14oR15R16R17i829R18i828gR19r55goR3jR4:9:2oR3jR4:1:1r275R14oR15R16R17i844R18i832gR19r276gar93hR14oR15R16R17i846R18i832gR19r55gR14oR15R16R17i846R18i828gR19r55goR3jR4:5:3r364oR3jR4:0:1jR49:3:1i1R14oR15R16R17i849R18i848gR19r55goR3jR4:9:2oR3jR4:1:1r275R14oR15R16R17i864R18i852gR19r276gar94hR14oR15R16R17i866R18i852gR19r55gR14oR15R16R17i866R18i848gR19r55ghR14oR15R16R17i867R18i824gR19r55ghR14oR15R16R17i868R18i783gR19r55goR3jR4:0:1jR49:3:1zR14oR15R16R17i872R18i871gR19r55gR14oR15R16R17i872R18i783gR19jR11:2:0goR3jR4:11:0R14oR15R16R17i882R18i875gR19r25gnR14oR15R16R17i882R18i779gR19r25ghR14oR15R16R17i888R18i323gR19r25gR6jR21:1:0R22oR6r28R8y8:fragmentR10jR11:13:1aoR1ahR24r25ghR13i-278gR24r25ghR8y22:h3d.shader.VolumeDecaly4:varsar88oR6r10R8y5:depthR10r55R13i-265gr275r27r9r282oR6r10R8y9:specColorR10jR11:5:2i3r11R13i-268gr16r411r202oR6r10R8y16:relativePositionR10jR11:5:2i3r11R13i-259gr45oR6jR7:5:0R8y6:outputR10jR11:12:1aoR6r423R8R31R10jR11:5:2i4r11R27r422R13i-255goR6r423R8y5:colorR10jR11:5:2i4r11R27r422R13i-256goR6r423R8R65R10jR11:5:2i4r11R27r422R13i-257goR6r423R8R20R10jR11:5:2i4r11R27r422R13i-258ghR13i-254goR6r10R8y8:screenUVR10jR11:5:2i2r11R13i-266gr65oR6jR7:1:0R8y5:inputR10jR11:12:1aoR6r437R8R31R10jR11:5:2i3r11R27r436R13i-252goR6r437R8R20R10jR11:5:2i3r11R27r436R13i-253ghR13i-251goR6r10R8y19:transformedPositionR10jR11:5:2i3r11R13i-260goR6r10R8y9:specPowerR10r55R13i-267gr248oR6r10R8y10:pixelColorR10jR11:5:2i4r11R13i-264ghg";
+h3d_shader_UVDelta.SRC = "oy4:funsaoy4:argsahy4:exproy1:ejy13:hxsl.TExprDef:4:1aoR3jR4:5:3jy16:haxe.macro.Binop:20:1jR5:0:0oR3jR4:1:1oy4:kindjy12:hxsl.VarKind:4:0y4:namey12:calculatedUVy4:typejy9:hxsl.Type:5:2i2jy12:hxsl.VecType:1:0y2:idi-217gy1:poy4:filey98:D%3A%5CNeelts%5CPrograms%5CDev%5CHaxe%5Chaxe%5Clib%5Cheaps%2F0%2C9%2C0%2Fh3d%2Fshader%2FUVDelta.hxy3:maxi179y3:mini167gy1:tr13goR3jR4:1:1oR6jR7:2:0R8y7:uvDeltaR10jR11:5:2i2r12R13i-216gR14oR15R16R17i190R18i183gR19r19gR14oR15R16R17i190R18i167gR19r13ghR14oR15R16R17i196R18i161gR19jR11:0:0gR6jy17:hxsl.FunctionKind:0:0y3:refoR6jR7:6:0R8y6:vertexR10jR11:13:1aoR1ahy3:retr26ghR13i-218gR24r26ghR8y18:h3d.shader.UVDeltay4:varsar10r28r17hg";
+h3d_shader_VertexColorAlpha.SRC = "oy4:funsaoy4:argsahy4:exproy1:ejy13:hxsl.TExprDef:4:1aoR3jR4:10:3oR3jR4:1:1oy4:kindjy12:hxsl.VarKind:2:0y4:namey8:additivey4:typejy9:hxsl.Type:2:0y10:qualifiersajy17:hxsl.VarQualifier:0:1nhy2:idi-314gy1:poy4:filey107:D%3A%5CNeelts%5CPrograms%5CDev%5CHaxe%5Chaxe%5Clib%5Cheaps%2F0%2C9%2C0%2Fh3d%2Fshader%2FVertexColorAlpha.hxy3:maxi245y3:mini237gy1:tr10goR3jR4:5:3jy16:haxe.macro.Binop:20:1jR20:0:0oR3jR4:1:1oR5jR6:4:0R7y10:pixelColorR9jR10:5:2i4jy12:hxsl.VecType:1:0R13i-313gR14oR15R16R17i263R18i253gR19r22goR3jR4:1:1oR5jR6:1:0R7y5:colorR9jR10:5:2i4r21y6:parentoR5r27R7y5:inputR9jR10:12:1ar26hR13i-311gR13i-312gR14oR15R16R17i278R18i267gR19r28gR14oR15R16R17i278R18i253gR19r22goR3jR4:5:3jR20:20:1jR20:1:0oR3jR4:1:1r19R14oR15R16R17i304R18i294gR19r22goR3jR4:1:1r26R14oR15R16R17i319R18i308gR19r28gR14oR15R16R17i319R18i294gR19r22gR14oR15R16R17i319R18i233gR19jR10:0:0ghR14oR15R16R17i325R18i227gR19r49gR5jy17:hxsl.FunctionKind:1:0y3:refoR5jR6:6:0R7y8:fragmentR9jR10:13:1aoR1ahy3:retr49ghR13i-315gR29r49ghR7y27:h3d.shader.VertexColorAlphay4:varsar53r8r29r19hg";
+h3d_shader_VolumeDecal.SRC = "oy4:funsaoy4:argsahy4:exproy1:ejy13:hxsl.TExprDef:4:1aoR3jR4:5:3jy16:haxe.macro.Binop:4:0oR3jR4:1:1oy4:kindjy12:hxsl.VarKind:4:0y4:namey17:transformedNormaly4:typejy9:hxsl.Type:5:2i3jy12:hxsl.VecType:1:0y2:idi-175gy1:poy4:filey102:D%3A%5CNeelts%5CPrograms%5CDev%5CHaxe%5Chaxe%5Clib%5Cheaps%2F0%2C9%2C0%2Fh3d%2Fshader%2FVolumeDecal.hxy3:maxi282y3:mini265gy1:tr12goR3jR4:1:1oR6jR7:2:0R8y6:normalR10jR11:5:2i3r11R13i-188gR14oR15R16R17i291R18i285gR19r18gR14oR15R16R17i291R18i265gR19r12ghR14oR15R16R17i297R18i259gR19jR11:0:0gR6jy17:hxsl.FunctionKind:0:0y3:refoR6jR7:6:0R8y6:vertexR10jR11:13:1aoR1ahy3:retr25ghR13i-190gR24r25goR1ahR2oR3jR4:4:1aoR3jR4:7:2oR6r10R8y6:matrixR10jR11:7:0R13i-192goR3jR4:5:3jR5:1:0oR3jR4:1:1oR6jR7:0:0R8y15:inverseViewProjR10r39y6:parentoR6r44R8y6:cameraR10jR11:12:1aoR6r44R8y4:viewR10r39R27r45R13i-150goR6r44R8y4:projR10r39R27r45R13i-151goR6r44R8y8:positionR10jR11:5:2i3r11R27r45R13i-152goR6r44R8y8:projDiagR10jR11:5:2i3r11R27r45R13i-153goR6r44R8y8:viewProjR10r39R27r45R13i-154gr43oR6r44R8y5:zNearR10jR11:3:0R27r45R13i-156goR6r44R8y4:zFarR10r55R27r45R13i-157goR6jR7:3:0R8y3:dirR10jR11:5:2i3r11R27r45R13i-158ghR13i-149gR13i-155gR14oR15R16R17i364R18i342gR19r39goR3jR4:1:1oR6r44R8y16:modelViewInverseR10r39R27oR6r44R8y6:globalR10jR11:12:1aoR6r44R8y4:timeR10r55R27r65R13i-160goR6r44R8y9:pixelSizeR10jR11:5:2i2r11R27r65R13i-161goR6r44R8y9:modelViewR10r39R27r65y10:qualifiersajy17:hxsl.VarQualifier:3:0hR13i-162gr64hR13i-159gR42ar72hR13i-163gR14oR15R16R17i390R18i367gR19r39gR14oR15R16R17i390R18i342gR19r39gR14oR15R16R17i391R18i329gR19r25goR3jR4:7:2oR6r10R8y9:screenPosR10jR11:5:2i2r11R13i-193goR3jR4:5:3jR5:2:0oR3jR4:9:2oR3jR4:1:1oR6r10R8y17:projectedPositionR10jR11:5:2i4r11R13i-176gR14oR15R16R17i429R18i412gR19r89gajy14:hxsl.Component:0:0jR46:1:0hR14oR15R16R17i432R18i412gR19r83goR3jR4:9:2oR3jR4:1:1r88R14oR15R16R17i452R18i435gR19r89gajR46:3:0hR14oR15R16R17i454R18i435gR19r55gR14oR15R16R17i454R18i412gR19r83gR14oR15R16R17i455R18i396gR19r25goR3jR4:7:2oR6r10R8y3:tuvR10jR11:5:2i2r11R13i-194goR3jR4:5:3jR5:0:0oR3jR4:5:3r41oR3jR4:1:1r82R14oR15R16R17i479R18i470gR19r83goR3jR4:8:2oR3jR4:2:1jy12:hxsl.TGlobal:38:0R14oR15R16R17i486R18i482gR19jR11:13:1ahgaoR3jR4:0:1jy10:hxsl.Const:3:1d0.5R14oR15R16R17i490R18i487gR19r55goR3jR4:0:1jR49:3:1d-0.5R14oR15R16R17i496R18i492gR19r55ghR14oR15R16R17i497R18i482gR19jR11:5:2i2r11gR14oR15R16R17i497R18i470gR19jR11:5:2i2r11goR3jR4:8:2oR3jR4:2:1r120R14oR15R16R17i504R18i500gR19r124gaoR3jR4:0:1jR49:3:1d0.5R14oR15R16R17i508R18i505gR19r55goR3jR4:0:1jR49:3:1d0.5R14oR15R16R17i513R18i510gR19r55ghR14oR15R16R17i514R18i500gR19jR11:5:2i2r11gR14oR15R16R17i514R18i470gR19r111gR14oR15R16R17i515R18i460gR19r25goR3jR4:7:2oR6r10R8y3:ruvR10jR11:5:2i4r11R13i-195goR3jR4:8:2oR3jR4:2:1jR48:40:0R14oR15R16R17i534R18i530gR19jR11:13:1ahgaoR3jR4:1:1r82R14oR15R16R17i550R18i541gR19r83goR3jR4:8:2oR3jR4:2:1jR48:53:0R14oR15R16R17i563R18i557gR19jR11:13:1aoR1aoR8y5:valueR10jR11:5:2i4r11ghR24r55ghgaoR3jR4:8:2oR3jR4:2:1jR48:33:0R14oR15R16R17i572R18i564gR19jR11:13:1aoR1aoR8y1:_R10jR11:10:0goR8y2:uvR10jR11:5:2i2r11ghR24jR11:5:2i4r11ghgaoR3jR4:1:1oR6r44R8y8:depthMapR10r195R13i-186gR14oR15R16R17i572R18i564gR19r195goR3jR4:1:1r110R14oR15R16R17i580R18i577gR19r111ghR14oR15R16R17i581R18i564gR19r198ghR14oR15R16R17i582R18i557gR19r55goR3jR4:0:1jR49:3:1i1R14oR15R16R17i590R18i589gR19r55ghR14oR15R16R17i596R18i530gR19r162gR14oR15R16R17i597R18i520gR19r25goR3jR4:7:2oR6r10R8y4:wposR10r198R13i-196goR3jR4:5:3r41oR3jR4:1:1r161R14oR15R16R17i616R18i613gR19r162goR3jR4:1:1r38R14oR15R16R17i625R18i619gR19r39gR14oR15R16R17i625R18i613gR19r198gR14oR15R16R17i626R18i602gR19r25goR3jR4:7:2oR6r10R8y4:pposR10r198R13i-197goR3jR4:5:3r41oR3jR4:1:1r161R14oR15R16R17i645R18i642gR19r162goR3jR4:1:1r43R14oR15R16R17i670R18i648gR19r39gR14oR15R16R17i670R18i642gR19r198gR14oR15R16R17i671R18i631gR19r25goR3jR4:5:3r7oR3jR4:1:1oR6r10R8y24:pixelTransformedPositionR10jR11:5:2i3r11R13i-174gR14oR15R16R17i700R18i676gR19r249goR3jR4:5:3r85oR3jR4:9:2oR3jR4:1:1r234R14oR15R16R17i707R18i703gR19r198gar93r94jR46:2:0hR14oR15R16R17i711R18i703gR19jR11:5:2i3r11goR3jR4:9:2oR3jR4:1:1r234R14oR15R16R17i718R18i714gR19r198gar102hR14oR15R16R17i720R18i714gR19r55gR14oR15R16R17i720R18i703gR19r261gR14oR15R16R17i720R18i676gR19r249goR3jR4:5:3r7oR3jR4:1:1oR6r10R8y12:calculatedUVR10jR11:5:2i2r11R13i-189gR14oR15R16R17i738R18i726gR19r276goR3jR4:5:3r113oR3jR4:5:3r41oR3jR4:1:1oR6r17R8y5:scaleR10jR11:5:2i2r11R13i-187gR14oR15R16R17i746R18i741gR19r283goR3jR4:3:1oR3jR4:5:3r85oR3jR4:9:2oR3jR4:1:1r221R14oR15R16R17i754R18i750gR19r198gar93r94hR14oR15R16R17i757R18i750gR19jR11:5:2i2r11goR3jR4:9:2oR3jR4:1:1r221R14oR15R16R17i764R18i760gR19r198gar102hR14oR15R16R17i766R18i760gR19r55gR14oR15R16R17i766R18i750gR19r295gR14oR15R16R17i767R18i749gR19r295gR14oR15R16R17i767R18i741gR19jR11:5:2i2r11goR3jR4:0:1jR49:3:1d0.5R14oR15R16R17i773R18i770gR19r55gR14oR15R16R17i773R18i741gR19r309gR14oR15R16R17i773R18i726gR19r276goR3jR4:10:3oR3jR4:5:3jR5:9:0oR3jR4:8:2oR3jR4:2:1jR48:21:0R14oR15R16R17i786R18i783gR19jR11:13:1aoR1aoR8y1:aR10r55goR8y1:bR10r55ghR24r55ghgaoR3jR4:8:2oR3jR4:2:1r323R14oR15R16R17i790R18i787gR19jR11:13:1ar327hgaoR3jR4:9:2oR3jR4:1:1r275R14oR15R16R17i803R18i791gR19r276gar93hR14oR15R16R17i805R18i791gR19r55goR3jR4:9:2oR3jR4:1:1r275R14oR15R16R17i819R18i807gR19r276gar94hR14oR15R16R17i821R18i807gR19r55ghR14oR15R16R17i822R18i787gR19r55goR3jR4:8:2oR3jR4:2:1r323R14oR15R16R17i827R18i824gR19jR11:13:1ar327hgaoR3jR4:5:3jR5:3:0oR3jR4:0:1jR49:3:1i1R14oR15R16R17i829R18i828gR19r55goR3jR4:9:2oR3jR4:1:1r275R14oR15R16R17i844R18i832gR19r276gar93hR14oR15R16R17i846R18i832gR19r55gR14oR15R16R17i846R18i828gR19r55goR3jR4:5:3r364oR3jR4:0:1jR49:3:1i1R14oR15R16R17i849R18i848gR19r55goR3jR4:9:2oR3jR4:1:1r275R14oR15R16R17i864R18i852gR19r276gar94hR14oR15R16R17i866R18i852gR19r55gR14oR15R16R17i866R18i848gR19r55ghR14oR15R16R17i867R18i824gR19r55ghR14oR15R16R17i868R18i783gR19r55goR3jR4:0:1jR49:3:1zR14oR15R16R17i872R18i871gR19r55gR14oR15R16R17i872R18i783gR19jR11:2:0goR3jR4:11:0R14oR15R16R17i882R18i875gR19r25gnR14oR15R16R17i882R18i779gR19r25ghR14oR15R16R17i888R18i323gR19r25gR6jR21:1:0R22oR6r28R8y8:fragmentR10jR11:13:1aoR1ahR24r25ghR13i-191gR24r25ghR8y22:h3d.shader.VolumeDecaly4:varsar88oR6r10R8y5:depthR10r55R13i-178gr275r27r9r282oR6r10R8y9:specColorR10jR11:5:2i3r11R13i-181gr16r411r202oR6r10R8y16:relativePositionR10jR11:5:2i3r11R13i-172gr45oR6jR7:5:0R8y6:outputR10jR11:12:1aoR6r423R8R31R10jR11:5:2i4r11R27r422R13i-168goR6r423R8y5:colorR10jR11:5:2i4r11R27r422R13i-169goR6r423R8R65R10jR11:5:2i4r11R27r422R13i-170goR6r423R8R20R10jR11:5:2i4r11R27r422R13i-171ghR13i-167goR6r10R8y8:screenUVR10jR11:5:2i2r11R13i-179gr65oR6jR7:1:0R8y5:inputR10jR11:12:1aoR6r437R8R31R10jR11:5:2i3r11R27r436R13i-165goR6r437R8R20R10jR11:5:2i3r11R27r436R13i-166ghR13i-164goR6r10R8y19:transformedPositionR10jR11:5:2i3r11R13i-173goR6r10R8y9:specPowerR10r55R13i-180gr248oR6r10R8y10:pixelColorR10jR11:5:2i4r11R13i-177ghg";
+haxe_EntryPoint.pending = [];
+haxe_EntryPoint.threadCount = 0;
 haxe_Unserializer.DEFAULT_RESOLVER = new haxe__$Unserializer_DefaultResolver();
 haxe_Unserializer.BASE64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789%:";
+haxe_crypto_Base64.CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+haxe_crypto_Base64.BYTES = haxe_io_Bytes.ofString(haxe_crypto_Base64.CHARS);
 haxe_ds_ObjectMap.count = 0;
+haxe_io_FPHelper.i64tmp = new haxe__$Int64__$_$_$Int64(0,0);
+haxe_zip_InflateImpl.LEN_EXTRA_BITS_TBL = [0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,4,4,4,4,5,5,5,5,0,-1,-1];
+haxe_zip_InflateImpl.LEN_BASE_VAL_TBL = [3,4,5,6,7,8,9,10,11,13,15,17,19,23,27,31,35,43,51,59,67,83,99,115,131,163,195,227,258];
+haxe_zip_InflateImpl.DIST_EXTRA_BITS_TBL = [0,0,0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9,10,10,11,11,12,12,13,13,-1,-1];
+haxe_zip_InflateImpl.DIST_BASE_VAL_TBL = [1,2,3,4,5,7,9,13,17,25,33,49,65,97,129,193,257,385,513,769,1025,1537,2049,3073,4097,6145,8193,12289,16385,24577];
+haxe_zip_InflateImpl.CODE_LENGTHS_POS = [16,17,18,0,8,7,9,6,10,5,11,4,12,3,13,2,14,1,15];
 hxd_Key.initDone = false;
 hxd_Key.keyPressed = [];
 hxd_Key.ALLOW_KEY_REPEAT = false;
@@ -20334,9 +24342,12 @@ hxd_Timer.calc_tmod = 1;
 hxd_Timer.tmod = 1;
 hxd_Timer.deltaT = 1;
 hxd_Timer.frameCount = 0;
+hxd_fs_EmbedFileSystem.invalidChars = new EReg("[^A-Za-z0-9_]","g");
 hxd_impl_Memory.stack = [];
 hxd_impl_Memory.inst = new hxd_impl_MemoryReader();
 hxd_impl_Tmp.bytes = [];
+hxd_res_Image.ALLOW_NPOT = true;
+hxd_res_Image.DEFAULT_FILTER = h3d_mat_Filter.Linear;
 hxsl_Tools.UID = 0;
 hxsl_Tools.SWIZ = hxsl_Component.__empty_constructs__;
 js_Boot.__toStr = ({ }).toString;
@@ -20400,5 +24411,8 @@ hxsl_Printer.SWIZ = ["x","y","z","w"];
 hxsl_RuntimeShader.UID = 0;
 js_html_compat_Float32Array.BYTES_PER_ELEMENT = 4;
 js_html_compat_Uint8Array.BYTES_PER_ELEMENT = 1;
-Test.main();
+{
+	Test.main();
+	haxe_EntryPoint.run();
+}
 })(typeof window != "undefined" ? window : typeof global != "undefined" ? global : typeof self != "undefined" ? self : this);

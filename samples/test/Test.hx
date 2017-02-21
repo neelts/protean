@@ -1,5 +1,6 @@
 package ;
 
+import protean.display.Image;
 import haxe.Timer;
 import protean.display.Shape;
 import js.Browser;
@@ -12,8 +13,7 @@ class Test extends Application {
 	
 	public function new() {
 		super({ 
-			parentDOM:Browser.document.getElementById(Global.id),
-			backgroundColor:0
+			parentDOM:Browser.document.getElementById(Protean.id), backgroundColor:0
 		});
 	}
 
@@ -22,11 +22,14 @@ class Test extends Application {
 	}
 
 	private var s:Shape;
-	
+	private var i:Image;
+
 	private function drawRect():Void {
 		s = new Shape();
 		s.style().rect(0, 0, 50, 50).setXY(200, 20).setScale(2).setRotation(Math.PI / 4).addTo(this);
 		Timer.delay(moves, 1000);
+		i = new Image("test.png");
+		i.setXY(300, 20).addTo(this);
 	}
 
 	private function moves():Void {

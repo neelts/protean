@@ -1,4 +1,0 @@
-package display;
-interface PDisplayObject {
-	
-}

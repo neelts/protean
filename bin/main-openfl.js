@@ -1475,6 +1475,9 @@ PApplication.prototype = $extend(display_PContainer.prototype,{
 	}
 	,__class__: PApplication
 });
+var Protean = function() { };
+$hxClasses["Protean"] = Protean;
+Protean.__name__ = ["Protean"];
 var Reflect = function() { };
 $hxClasses["Reflect"] = Reflect;
 Reflect.__name__ = ["Reflect"];
@@ -1617,7 +1620,7 @@ protean_Application.prototype = $extend(PApplication.prototype,{
 	__class__: protean_Application
 });
 var Test = function() {
-	protean_Application.call(this,{ parentDOM : window.document.getElementById(Global.id), backgroundColor : 0});
+	protean_Application.call(this,{ parentDOM : window.document.getElementById(Protean.id), backgroundColor : 0});
 };
 $hxClasses["Test"] = Test;
 Test.__name__ = ["Test"];
@@ -1630,6 +1633,7 @@ Test.prototype = $extend(protean_Application.prototype,{
 		this.drawRect();
 	}
 	,s: null
+	,i: null
 	,drawRect: function() {
 		this.s = new protean_display_Shape();
 		var shape = this.s;
@@ -1642,6 +1646,11 @@ Test.prototype = $extend(protean_Application.prototype,{
 		object.set_rotation(Math.PI / 4 / display_DisplayObjectAPI.PI);
 		this.addChild(object);
 		haxe_Timer.delay($bind(this,this.moves),1000);
+		this.i = new protean_display_Image("test.png");
+		var object1 = this.i;
+		object1.set_x(300);
+		object1.set_y(20);
+		this.addChild(object1);
 	}
 	,moves: function() {
 		console.log(Global.id);
@@ -1804,6 +1813,178 @@ Type["typeof"] = function(v) {
 var display_DisplayObjectAPI = function() { };
 $hxClasses["display.DisplayObjectAPI"] = display_DisplayObjectAPI;
 display_DisplayObjectAPI.__name__ = ["display","DisplayObjectAPI"];
+var openfl_display_Bitmap = function(bitmapData,pixelSnapping,smoothing) {
+	if(smoothing == null) {
+		smoothing = false;
+	}
+	openfl_display_DisplayObject.call(this);
+	this.set_bitmapData(bitmapData);
+	this.pixelSnapping = pixelSnapping;
+	this.smoothing = smoothing;
+	if(pixelSnapping == null) {
+		this.pixelSnapping = 1;
+	}
+};
+$hxClasses["openfl.display.Bitmap"] = openfl_display_Bitmap;
+openfl_display_Bitmap.__name__ = ["openfl","display","Bitmap"];
+openfl_display_Bitmap.__super__ = openfl_display_DisplayObject;
+openfl_display_Bitmap.prototype = $extend(openfl_display_DisplayObject.prototype,{
+	bitmapData: null
+	,pixelSnapping: null
+	,smoothing: null
+	,__getBounds: function(rect,matrix) {
+		if(this.bitmapData != null) {
+			var bounds = openfl_geom_Rectangle.__temp;
+			bounds.setTo(0,0,this.bitmapData.width,this.bitmapData.height);
+			bounds.__transform(bounds,matrix);
+			rect.__expand(bounds.x,bounds.y,bounds.width,bounds.height);
+		}
+	}
+	,__hitTest: function(x,y,shapeFlag,stack,interactiveOnly,hitObject) {
+		if(!hitObject.get_visible() || this.__isMask || this.bitmapData == null) {
+			return false;
+		}
+		if(this.get_mask() != null && !this.get_mask().__hitTestMask(x,y)) {
+			return false;
+		}
+		this.__getRenderTransform();
+		var _this = this.__renderTransform;
+		var norm = _this.a * _this.d - _this.b * _this.c;
+		var px = norm == 0 ? -_this.tx : 1.0 / norm * (_this.c * (_this.ty - y) + _this.d * (x - _this.tx));
+		var _this1 = this.__renderTransform;
+		var norm1 = _this1.a * _this1.d - _this1.b * _this1.c;
+		var py = norm1 == 0 ? -_this1.ty : 1.0 / norm1 * (_this1.a * (y - _this1.ty) + _this1.b * (_this1.tx - x));
+		if(px > 0 && py > 0 && px <= this.bitmapData.width && py <= this.bitmapData.height) {
+			if(stack != null && !interactiveOnly) {
+				stack.push(hitObject);
+			}
+			return true;
+		}
+		return false;
+	}
+	,__hitTestMask: function(x,y) {
+		if(this.bitmapData == null) {
+			return false;
+		}
+		this.__getRenderTransform();
+		var _this = this.__renderTransform;
+		var norm = _this.a * _this.d - _this.b * _this.c;
+		var px = norm == 0 ? -_this.tx : 1.0 / norm * (_this.c * (_this.ty - y) + _this.d * (x - _this.tx));
+		var _this1 = this.__renderTransform;
+		var norm1 = _this1.a * _this1.d - _this1.b * _this1.c;
+		var py = norm1 == 0 ? -_this1.ty : 1.0 / norm1 * (_this1.a * (y - _this1.ty) + _this1.b * (_this1.tx - x));
+		if(px > 0 && py > 0 && px <= this.bitmapData.width && py <= this.bitmapData.height) {
+			return true;
+		}
+		return false;
+	}
+	,__renderCanvas: function(renderSession) {
+		if(!(!this.__renderable || this.__worldAlpha <= 0)) {
+			var context = renderSession.context;
+			if(this.bitmapData != null && this.bitmapData.__isValid) {
+				renderSession.maskManager.pushObject(this,false);
+				lime_graphics_utils_ImageCanvasUtil.convertToCanvas(this.bitmapData.image);
+				context.globalAlpha = this.__worldAlpha;
+				var transform = this.__renderTransform;
+				var scrollRect = this.__scrollRect;
+				if(renderSession.roundPixels) {
+					context.setTransform(transform.a,transform.b,transform.c,transform.d,transform.tx | 0,transform.ty | 0);
+				} else {
+					context.setTransform(transform.a,transform.b,transform.c,transform.d,transform.tx,transform.ty);
+				}
+				if(!renderSession.allowSmoothing || !this.smoothing) {
+					context.mozImageSmoothingEnabled = false;
+					context.msImageSmoothingEnabled = false;
+					context.imageSmoothingEnabled = false;
+				}
+				if(scrollRect == null) {
+					context.drawImage(this.bitmapData.image.get_src(),0,0);
+				} else {
+					context.drawImage(this.bitmapData.image.get_src(),scrollRect.x,scrollRect.y,scrollRect.width,scrollRect.height,scrollRect.x,scrollRect.y,scrollRect.width,scrollRect.height);
+				}
+				if(!renderSession.allowSmoothing || !this.smoothing) {
+					context.mozImageSmoothingEnabled = true;
+					context.msImageSmoothingEnabled = true;
+					context.imageSmoothingEnabled = true;
+				}
+				renderSession.maskManager.popObject(this,false);
+			}
+		}
+	}
+	,__renderCanvasMask: function(renderSession) {
+		renderSession.context.rect(0,0,this.get_width(),this.get_height());
+	}
+	,__renderGL: function(renderSession) {
+		if(!(!this.__renderable || this.__worldAlpha <= 0)) {
+			if(this.bitmapData != null && this.bitmapData.__isValid) {
+				var renderer = renderSession.renderer;
+				var gl = renderSession.gl;
+				renderSession.blendModeManager.setBlendMode(this.get_blendMode());
+				renderSession.maskManager.pushObject(this);
+				var shader = renderSession.filterManager.pushObject(this);
+				shader.get_data().uImage0.input = this.bitmapData;
+				var tmp = renderSession.allowSmoothing && (this.smoothing || renderSession.upscaled);
+				shader.get_data().uImage0.smoothing = tmp;
+				shader.get_data().uMatrix.value = renderer.getMatrix(this.__renderTransform);
+				renderSession.shaderManager.setShader(shader);
+				gl.bindBuffer(gl.ARRAY_BUFFER,this.bitmapData.getBuffer(gl,this.__worldAlpha));
+				gl.vertexAttribPointer(shader.get_data().aPosition.index,3,gl.FLOAT,false,24,0);
+				gl.vertexAttribPointer(shader.get_data().aTexCoord.index,2,gl.FLOAT,false,24,12);
+				gl.vertexAttribPointer(shader.get_data().aAlpha.index,1,gl.FLOAT,false,24,20);
+				gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+				renderSession.filterManager.popObject(this);
+				renderSession.maskManager.popObject(this);
+			}
+		}
+	}
+	,__updateMask: function(maskGraphics) {
+		if(this.bitmapData == null) {
+			return;
+		}
+		maskGraphics.__commands.overrideMatrix(this.__worldTransform);
+		maskGraphics.beginFill(0);
+		maskGraphics.drawRect(0,0,this.bitmapData.width,this.bitmapData.height);
+		if(maskGraphics.__bounds == null) {
+			maskGraphics.__bounds = new openfl_geom_Rectangle();
+		}
+		this.__getBounds(maskGraphics.__bounds,openfl_geom_Matrix.__identity);
+		openfl_display_DisplayObject.prototype.__updateMask.call(this,maskGraphics);
+	}
+	,set_bitmapData: function(value) {
+		this.bitmapData = value;
+		this.smoothing = false;
+		this.__filters != null && this.__filters.length > 0;
+		return this.bitmapData;
+	}
+	,get_height: function() {
+		if(this.bitmapData != null) {
+			return this.bitmapData.height * Math.abs(this.get_scaleY());
+		}
+		return 0;
+	}
+	,get_width: function() {
+		if(this.bitmapData != null) {
+			return this.bitmapData.width * Math.abs(this.__scaleX);
+		}
+		return 0;
+	}
+	,__class__: openfl_display_Bitmap
+});
+var display_PImage = function(path) {
+	var _gthis = this;
+	openfl_display_Bitmap.call(this,null,1,true);
+	openfl_Assets.loadBitmapData(Protean.root + path,true,function(b) {
+		console.log("!!!");
+		_gthis.set_bitmapData(b);
+	});
+};
+$hxClasses["display.PImage"] = display_PImage;
+display_PImage.__name__ = ["display","PImage"];
+display_PImage.__interfaces__ = [display_PDisplayObject];
+display_PImage.__super__ = openfl_display_Bitmap;
+display_PImage.prototype = $extend(openfl_display_Bitmap.prototype,{
+	__class__: display_PImage
+});
 var openfl_display_Shape = function() {
 	openfl_display_DisplayObject.call(this);
 };
@@ -8472,7 +8653,7 @@ var lime_utils_AssetCache = function() {
 	this.audio = new haxe_ds_StringMap();
 	this.font = new haxe_ds_StringMap();
 	this.image = new haxe_ds_StringMap();
-	this.version = 211636;
+	this.version = 881444;
 };
 $hxClasses["lime.utils.AssetCache"] = lime_utils_AssetCache;
 lime_utils_AssetCache.__name__ = ["lime","utils","AssetCache"];
@@ -8958,6 +9139,22 @@ openfl_Assets.getBitmapData = function(id,useCache) {
 		useCache = true;
 	}
 	return null;
+};
+openfl_Assets.loadBitmapData = function(id,useCache,handler) {
+	if(useCache == null) {
+		useCache = true;
+	}
+	if(useCache == null) {
+		useCache = true;
+	}
+	var promise = new lime_app_Promise();
+	if(handler != null) {
+		promise.future.onComplete(handler);
+		promise.future.onError(function(_) {
+			handler(null);
+		});
+	}
+	return promise.future;
 };
 var openfl_AssetLibrary = function() {
 	lime_utils_AssetLibrary.call(this);
@@ -17962,163 +18159,6 @@ openfl_display_Application.prototype = $extend(lime_app_Application.prototype,{
 	}
 	,__class__: openfl_display_Application
 });
-var openfl_display_Bitmap = function(bitmapData,pixelSnapping,smoothing) {
-	if(smoothing == null) {
-		smoothing = false;
-	}
-	openfl_display_DisplayObject.call(this);
-	this.set_bitmapData(bitmapData);
-	this.pixelSnapping = pixelSnapping;
-	this.smoothing = smoothing;
-	if(pixelSnapping == null) {
-		this.pixelSnapping = 1;
-	}
-};
-$hxClasses["openfl.display.Bitmap"] = openfl_display_Bitmap;
-openfl_display_Bitmap.__name__ = ["openfl","display","Bitmap"];
-openfl_display_Bitmap.__super__ = openfl_display_DisplayObject;
-openfl_display_Bitmap.prototype = $extend(openfl_display_DisplayObject.prototype,{
-	bitmapData: null
-	,pixelSnapping: null
-	,smoothing: null
-	,__getBounds: function(rect,matrix) {
-		if(this.bitmapData != null) {
-			var bounds = openfl_geom_Rectangle.__temp;
-			bounds.setTo(0,0,this.bitmapData.width,this.bitmapData.height);
-			bounds.__transform(bounds,matrix);
-			rect.__expand(bounds.x,bounds.y,bounds.width,bounds.height);
-		}
-	}
-	,__hitTest: function(x,y,shapeFlag,stack,interactiveOnly,hitObject) {
-		if(!hitObject.get_visible() || this.__isMask || this.bitmapData == null) {
-			return false;
-		}
-		if(this.get_mask() != null && !this.get_mask().__hitTestMask(x,y)) {
-			return false;
-		}
-		this.__getRenderTransform();
-		var _this = this.__renderTransform;
-		var norm = _this.a * _this.d - _this.b * _this.c;
-		var px = norm == 0 ? -_this.tx : 1.0 / norm * (_this.c * (_this.ty - y) + _this.d * (x - _this.tx));
-		var _this1 = this.__renderTransform;
-		var norm1 = _this1.a * _this1.d - _this1.b * _this1.c;
-		var py = norm1 == 0 ? -_this1.ty : 1.0 / norm1 * (_this1.a * (y - _this1.ty) + _this1.b * (_this1.tx - x));
-		if(px > 0 && py > 0 && px <= this.bitmapData.width && py <= this.bitmapData.height) {
-			if(stack != null && !interactiveOnly) {
-				stack.push(hitObject);
-			}
-			return true;
-		}
-		return false;
-	}
-	,__hitTestMask: function(x,y) {
-		if(this.bitmapData == null) {
-			return false;
-		}
-		this.__getRenderTransform();
-		var _this = this.__renderTransform;
-		var norm = _this.a * _this.d - _this.b * _this.c;
-		var px = norm == 0 ? -_this.tx : 1.0 / norm * (_this.c * (_this.ty - y) + _this.d * (x - _this.tx));
-		var _this1 = this.__renderTransform;
-		var norm1 = _this1.a * _this1.d - _this1.b * _this1.c;
-		var py = norm1 == 0 ? -_this1.ty : 1.0 / norm1 * (_this1.a * (y - _this1.ty) + _this1.b * (_this1.tx - x));
-		if(px > 0 && py > 0 && px <= this.bitmapData.width && py <= this.bitmapData.height) {
-			return true;
-		}
-		return false;
-	}
-	,__renderCanvas: function(renderSession) {
-		if(!(!this.__renderable || this.__worldAlpha <= 0)) {
-			var context = renderSession.context;
-			if(this.bitmapData != null && this.bitmapData.__isValid) {
-				renderSession.maskManager.pushObject(this,false);
-				lime_graphics_utils_ImageCanvasUtil.convertToCanvas(this.bitmapData.image);
-				context.globalAlpha = this.__worldAlpha;
-				var transform = this.__renderTransform;
-				var scrollRect = this.__scrollRect;
-				if(renderSession.roundPixels) {
-					context.setTransform(transform.a,transform.b,transform.c,transform.d,transform.tx | 0,transform.ty | 0);
-				} else {
-					context.setTransform(transform.a,transform.b,transform.c,transform.d,transform.tx,transform.ty);
-				}
-				if(!renderSession.allowSmoothing || !this.smoothing) {
-					context.mozImageSmoothingEnabled = false;
-					context.msImageSmoothingEnabled = false;
-					context.imageSmoothingEnabled = false;
-				}
-				if(scrollRect == null) {
-					context.drawImage(this.bitmapData.image.get_src(),0,0);
-				} else {
-					context.drawImage(this.bitmapData.image.get_src(),scrollRect.x,scrollRect.y,scrollRect.width,scrollRect.height,scrollRect.x,scrollRect.y,scrollRect.width,scrollRect.height);
-				}
-				if(!renderSession.allowSmoothing || !this.smoothing) {
-					context.mozImageSmoothingEnabled = true;
-					context.msImageSmoothingEnabled = true;
-					context.imageSmoothingEnabled = true;
-				}
-				renderSession.maskManager.popObject(this,false);
-			}
-		}
-	}
-	,__renderCanvasMask: function(renderSession) {
-		renderSession.context.rect(0,0,this.get_width(),this.get_height());
-	}
-	,__renderGL: function(renderSession) {
-		if(!(!this.__renderable || this.__worldAlpha <= 0)) {
-			if(this.bitmapData != null && this.bitmapData.__isValid) {
-				var renderer = renderSession.renderer;
-				var gl = renderSession.gl;
-				renderSession.blendModeManager.setBlendMode(this.get_blendMode());
-				renderSession.maskManager.pushObject(this);
-				var shader = renderSession.filterManager.pushObject(this);
-				shader.get_data().uImage0.input = this.bitmapData;
-				var tmp = renderSession.allowSmoothing && (this.smoothing || renderSession.upscaled);
-				shader.get_data().uImage0.smoothing = tmp;
-				shader.get_data().uMatrix.value = renderer.getMatrix(this.__renderTransform);
-				renderSession.shaderManager.setShader(shader);
-				gl.bindBuffer(gl.ARRAY_BUFFER,this.bitmapData.getBuffer(gl,this.__worldAlpha));
-				gl.vertexAttribPointer(shader.get_data().aPosition.index,3,gl.FLOAT,false,24,0);
-				gl.vertexAttribPointer(shader.get_data().aTexCoord.index,2,gl.FLOAT,false,24,12);
-				gl.vertexAttribPointer(shader.get_data().aAlpha.index,1,gl.FLOAT,false,24,20);
-				gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
-				renderSession.filterManager.popObject(this);
-				renderSession.maskManager.popObject(this);
-			}
-		}
-	}
-	,__updateMask: function(maskGraphics) {
-		if(this.bitmapData == null) {
-			return;
-		}
-		maskGraphics.__commands.overrideMatrix(this.__worldTransform);
-		maskGraphics.beginFill(0);
-		maskGraphics.drawRect(0,0,this.bitmapData.width,this.bitmapData.height);
-		if(maskGraphics.__bounds == null) {
-			maskGraphics.__bounds = new openfl_geom_Rectangle();
-		}
-		this.__getBounds(maskGraphics.__bounds,openfl_geom_Matrix.__identity);
-		openfl_display_DisplayObject.prototype.__updateMask.call(this,maskGraphics);
-	}
-	,set_bitmapData: function(value) {
-		this.bitmapData = value;
-		this.smoothing = false;
-		this.__filters != null && this.__filters.length > 0;
-		return this.bitmapData;
-	}
-	,get_height: function() {
-		if(this.bitmapData != null) {
-			return this.bitmapData.height * Math.abs(this.get_scaleY());
-		}
-		return 0;
-	}
-	,get_width: function() {
-		if(this.bitmapData != null) {
-			return this.bitmapData.width * Math.abs(this.__scaleX);
-		}
-		return 0;
-	}
-	,__class__: openfl_display_Bitmap
-});
 var openfl_display_BitmapData = function(width,height,transparent,fillColor) {
 	if(fillColor == null) {
 		fillColor = -1;
@@ -24756,6 +24796,15 @@ haxe_lang_Iterable.prototype = {
 	iterator: null
 	,__class__: haxe_lang_Iterable
 };
+var protean_display_Image = function(path) {
+	display_PImage.call(this,path);
+};
+$hxClasses["protean.display.Image"] = protean_display_Image;
+protean_display_Image.__name__ = ["protean","display","Image"];
+protean_display_Image.__super__ = display_PImage;
+protean_display_Image.prototype = $extend(display_PImage.prototype,{
+	__class__: protean_display_Image
+});
 var protean_display_Shape = function() {
 	display_PShape.call(this);
 };
@@ -24823,6 +24872,8 @@ openfl_display_DisplayObject.__broadcastEvents = new haxe_ds_StringMap();
 openfl_display_DisplayObject.__instanceCount = 0;
 openfl_display_DisplayObject.__worldRenderDirty = 0;
 openfl_display_DisplayObject.__worldTransformDirty = 0;
+Protean.id = "openfl";
+Protean.root = "assets" + "/";
 display_DisplayObjectAPI.PI = Math.PI / 180;
 haxe_Serializer.USE_CACHE = false;
 haxe_Serializer.USE_ENUM_INDEX = false;

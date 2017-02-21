@@ -13,12 +13,15 @@
       <sourceFolder url="file://$MODULE_DIR$/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/samples/test" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/targets/luxe" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/targets/pixi" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/targets/heaps" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/stub" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/targets/openfl" isTestSource="false" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
     <orderEntry type="library" name="Pixi 4,3,4" level="application" />
     <orderEntry type="library" name="OpenFL 4,7,3" level="application" />
     <orderEntry type="library" name="Heaps 0,9,0" level="application" />
+    <orderEntry type="library" name="Lime 3,7,2" level="application" />
   </component>
 </module>

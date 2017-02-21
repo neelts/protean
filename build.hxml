@@ -1,9 +1,11 @@
 --next
 -cp samples/test
 -cp src
+-cp bin
 -main Test
 -dce full
 -D analyzer-optimize
+-D assetsRoot=assets
 
 --each
 
@@ -31,6 +33,7 @@
 # Heaps
 
 --next
+-D resourcesPath=bin/assets
 -D target=heaps
 -cp targets/heaps
 -lib heaps:0.9.0
