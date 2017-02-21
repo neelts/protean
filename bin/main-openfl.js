@@ -1646,7 +1646,7 @@ Test.prototype = $extend(protean_Application.prototype,{
 		object.set_rotation(Math.PI / 4 / display_DisplayObjectAPI.PI);
 		this.addChild(object);
 		haxe_Timer.delay($bind(this,this.moves),1000);
-		this.i = new protean_display_Image("test.png");
+		this.i = new protean_display_Image(Protean.id + ".png");
 		var object1 = this.i;
 		object1.set_x(300);
 		object1.set_y(20);
@@ -1973,8 +1973,7 @@ openfl_display_Bitmap.prototype = $extend(openfl_display_DisplayObject.prototype
 var display_PImage = function(path) {
 	var _gthis = this;
 	openfl_display_Bitmap.call(this,null,1,true);
-	openfl_Assets.loadBitmapData(Protean.root + path,true,function(b) {
-		console.log("!!!");
+	openfl_display_BitmapData.loadFromFile(Protean.root + path).onComplete(function(b) {
 		_gthis.set_bitmapData(b);
 	});
 };
@@ -8653,7 +8652,7 @@ var lime_utils_AssetCache = function() {
 	this.audio = new haxe_ds_StringMap();
 	this.font = new haxe_ds_StringMap();
 	this.image = new haxe_ds_StringMap();
-	this.version = 881444;
+	this.version = 939170;
 };
 $hxClasses["lime.utils.AssetCache"] = lime_utils_AssetCache;
 lime_utils_AssetCache.__name__ = ["lime","utils","AssetCache"];
@@ -9139,22 +9138,6 @@ openfl_Assets.getBitmapData = function(id,useCache) {
 		useCache = true;
 	}
 	return null;
-};
-openfl_Assets.loadBitmapData = function(id,useCache,handler) {
-	if(useCache == null) {
-		useCache = true;
-	}
-	if(useCache == null) {
-		useCache = true;
-	}
-	var promise = new lime_app_Promise();
-	if(handler != null) {
-		promise.future.onComplete(handler);
-		promise.future.onError(function(_) {
-			handler(null);
-		});
-	}
-	return promise.future;
 };
 var openfl_AssetLibrary = function() {
 	lime_utils_AssetLibrary.call(this);
