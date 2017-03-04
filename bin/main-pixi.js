@@ -149,16 +149,17 @@ Test.prototype = $extend(protean_Application.prototype,{
 		var shape = this.s;
 		shape.lineStyle(1,16711680,1);
 		shape.drawRect(0,0,50,50);
-		var object = shape;
-		object.position.set(200,20);
-		object.scale.set(2,2);
-		object.rotation = Math.PI / 4;
-		this.addChild(object);
+		shape.position.set(200,20);
+		shape.scale.set(2,2);
+		shape.rotation = Math.PI / 4;
+		this.addChild(shape);
+		shape.scale.x = 1;
+		shape.scale.y = 3;
 		haxe_Timer.delay($bind(this,this.moves),1000);
-		this.i = new protean_display_Image("test.png");
-		var object1 = this.i;
-		object1.position.set(300,20);
-		this.addChild(object1);
+		this.i = new protean_display_Image(Protean.id + ".png");
+		var object = this.i;
+		object.position.set(300,20);
+		this.addChild(object);
 	}
 	,moves: function() {
 		console.log(Global.id);

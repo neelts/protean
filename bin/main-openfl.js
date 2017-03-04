@@ -1441,12 +1441,7 @@ var display_PDisplayObject = function() { };
 $hxClasses["display.PDisplayObject"] = display_PDisplayObject;
 display_PDisplayObject.__name__ = ["display","PDisplayObject"];
 display_PDisplayObject.prototype = {
-	set_x: null
-	,set_y: null
-	,set_scaleX: null
-	,set_scaleY: null
-	,set_rotation: null
-	,__class__: display_PDisplayObject
+	__class__: display_PDisplayObject
 };
 var display_PContainer = function() {
 	openfl_display_Sprite.call(this);
@@ -1639,18 +1634,20 @@ Test.prototype = $extend(protean_Application.prototype,{
 		var shape = this.s;
 		shape.get_graphics().lineStyle(1,16711680,1);
 		shape.get_graphics().drawRect(0,0,50,50);
-		var object = shape;
-		object.set_x(200);
-		object.set_y(20);
-		object.set_scaleX(object.set_scaleY(2));
-		object.set_rotation(Math.PI / 4 / display_DisplayObjectAPI.PI);
-		this.addChild(object);
+		shape.set_x(200);
+		shape.set_y(20);
+		shape.set_scaleX(2);
+		shape.set_scaleY(2);
+		shape.set_rotation(Math.PI / 4 / display_DisplayObjectAPI.PI);
+		this.addChild(shape);
+		shape.set_scaleX(1);
+		shape.set_scaleY(3);
 		haxe_Timer.delay($bind(this,this.moves),1000);
 		this.i = new protean_display_Image(Protean.id + ".png");
-		var object1 = this.i;
-		object1.set_x(300);
-		object1.set_y(20);
-		this.addChild(object1);
+		var object = this.i;
+		object.set_x(300);
+		object.set_y(20);
+		this.addChild(object);
 	}
 	,moves: function() {
 		console.log(Global.id);
@@ -8652,7 +8649,7 @@ var lime_utils_AssetCache = function() {
 	this.audio = new haxe_ds_StringMap();
 	this.font = new haxe_ds_StringMap();
 	this.image = new haxe_ds_StringMap();
-	this.version = 939170;
+	this.version = 711574;
 };
 $hxClasses["lime.utils.AssetCache"] = lime_utils_AssetCache;
 lime_utils_AssetCache.__name__ = ["lime","utils","AssetCache"];

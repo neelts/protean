@@ -25,7 +25,5 @@ class PApplication extends PContainer {
 		onReady();
 	}
 
-	private function onReady():Void {
-		
-	}
+	private function onReady():Void {}
 }

@@ -13,9 +13,7 @@
       <sourceFolder url="file://$MODULE_DIR$/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/samples/test" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/targets/luxe" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/targets/heaps" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/stub" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/targets/openfl" isTestSource="false" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />

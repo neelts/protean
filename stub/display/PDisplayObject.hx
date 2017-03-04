@@ -1,2 +1,2 @@
 package display;
-interface PDisplayObject {}
+class PDisplayObject {}

@@ -1,4 +1,4 @@
 package display;
-extern class PShape implements PDisplayObject {
-	public function new():Void;
+class PShape extends PDisplayObject {
+	public function new():Void {}
 }

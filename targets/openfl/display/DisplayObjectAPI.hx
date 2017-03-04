@@ -3,33 +3,44 @@ class DisplayObjectAPI {
 
 	private static var PI:Float = (Math.PI / 180);
 
-	public static inline function addTo(object:PDisplayObject, container:PContainer):PDisplayObject {
+	public static inline function addTo<T:PDisplayObject>(object:T, container:PContainer):T {
 		container.addChild(cast object);
 		return object;
 	}
 
-	public static inline function setX(object:PDisplayObject, x:Float):PDisplayObject {
+	public static inline function setX<T:PDisplayObject>(object:T, x:Float):T {
 		object.x = x;
 		return object;
 	}
 
-	public static inline function setY(object:PDisplayObject, y:Float):PDisplayObject {
+	public static inline function setY<T:PDisplayObject>(object:T, y:Float):T {
 		object.y = y;
 		return object;
 	}
 
-	public static inline function setXY(object:PDisplayObject, x:Float, y:Float):PDisplayObject {
+	public static inline function setXY<T:PDisplayObject>(object:T, x:Float, y:Float):T {
 		object.x = x;
 		object.y = y;
 		return object;
 	}
 
-	public static inline function setScale(object:PDisplayObject, scale:Float):PDisplayObject {
-		object.scaleX = object.scaleY = scale;
+	public static inline function setScaleX<T:PDisplayObject>(object:T, scale:Float):T {
+		object.scaleX = scale;
 		return object;
 	}
 
-	public static inline function setRotation(object:PDisplayObject, rotation:Float):PDisplayObject {
+	public static inline function setScaleY<T:PDisplayObject>(object:T, scale:Float):T {
+		object.scaleY = scale;
+		return object;
+	}
+
+	public static inline function setScaling<T:PDisplayObject>(object:T, scale:Float):T {
+		object.scaleX = scale; 
+		object.scaleY = scale;
+		return object;
+	}
+
+	public static inline function setRotation<T:PDisplayObject>(object:T, rotation:Float):T {
 		object.rotation = rotation / PI;
 		return object;
 	}

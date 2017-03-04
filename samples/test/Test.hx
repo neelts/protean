@@ -26,7 +26,7 @@ class Test extends Application {
 
 	private function drawRect():Void {
 		s = new Shape();
-		s.style().rect(0, 0, 50, 50).setXY(200, 20).setScale(2).setRotation(Math.PI / 4).addTo(this);
+		s.style().rect(0, 0, 50, 50).setXY(200, 20).setScaling(2).setRotation(Math.PI / 4).addTo(this);
 		Timer.delay(moves, 1000);
 		i = new Image(Protean.id + ".png");
 		i.setXY(300, 20).addTo(this);
