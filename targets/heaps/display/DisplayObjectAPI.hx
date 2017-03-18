@@ -42,4 +42,13 @@ class DisplayObjectAPI {
 		object.rotation = rotation;
 		return object;
 	}
+
+	public static inline function getX(object:PDisplayObject):Float return object.x;
+	public static inline function getY(object:PDisplayObject):Float return object.y;
+	public static inline function getScaleX(object:PDisplayObject):Float return object.scaleX;
+	public static inline function getScaleY(object:PDisplayObject):Float return object.scaleY;
+	public static inline function getScaling(object:PDisplayObject):Float {
+		return object.scaleX == object.scaleY ? object.scaleX : 0;
+	}
+	public static inline function getRotation(object:PDisplayObject):Float return object.rotation;
 }

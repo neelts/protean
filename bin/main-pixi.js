@@ -7,10 +7,14 @@ function $extend(from, fields) {
 	return proto;
 }
 var Global = function() { };
+Global.__name__ = true;
+Math.__name__ = true;
 var display_PDisplayObject = function() { };
+display_PDisplayObject.__name__ = true;
 var display_PContainer = function() {
 	PIXI.Container.call(this);
 };
+display_PContainer.__name__ = true;
 display_PContainer.__interfaces__ = [display_PDisplayObject];
 display_PContainer.__super__ = PIXI.Container;
 display_PContainer.prototype = $extend(PIXI.Container.prototype,{
@@ -23,6 +27,7 @@ var PApplication = function(settings) {
 	this.app.stage.addChild(this);
 	this.onReady();
 };
+PApplication.__name__ = true;
 PApplication.__super__ = display_PContainer;
 PApplication.prototype = $extend(display_PContainer.prototype,{
 	onReady: function() {
@@ -43,6 +48,7 @@ var pixi_plugins_app_Application = function() {
 	this.height = window.innerHeight;
 	this.position = "static";
 };
+pixi_plugins_app_Application.__name__ = true;
 pixi_plugins_app_Application.prototype = {
 	start: function(rendererType,parentDom,canvasElement) {
 		if(rendererType == null) {
@@ -105,6 +111,7 @@ pixi_plugins_app_Application.prototype = {
 var PTApplication = function() {
 	pixi_plugins_app_Application.call(this);
 };
+PTApplication.__name__ = true;
 PTApplication.__super__ = pixi_plugins_app_Application;
 PTApplication.prototype = $extend(pixi_plugins_app_Application.prototype,{
 	start: function(rendererType,parentDom,canvasElement) {
@@ -127,15 +134,23 @@ PTApplication.prototype = $extend(pixi_plugins_app_Application.prototype,{
 	}
 });
 var Protean = function() { };
+Protean.__name__ = true;
+Protean.routeTrace = function(v,infos) {
+	window.console.log(infos.className + "." + infos.methodName + ":" + infos.lineNumber + ":");
+	window.console.log(v);
+};
 var protean_Application = function(options) {
+	haxe_Log.trace = Protean.routeTrace;
 	PApplication.call(this,options);
 };
+protean_Application.__name__ = true;
 protean_Application.__super__ = PApplication;
 protean_Application.prototype = $extend(PApplication.prototype,{
 });
 var Test = function() {
 	protean_Application.call(this,{ parentDOM : window.document.getElementById(Protean.id), backgroundColor : 0});
 };
+Test.__name__ = true;
 Test.main = function() {
 	new Test();
 };
@@ -153,22 +168,33 @@ Test.prototype = $extend(protean_Application.prototype,{
 		shape.scale.set(2,2);
 		shape.rotation = Math.PI / 4;
 		this.addChild(shape);
-		shape.scale.x = 1;
-		shape.scale.y = 3;
 		haxe_Timer.delay($bind(this,this.moves),1000);
 		this.i = new protean_display_Image(Protean.id + ".png");
-		var object = this.i;
-		object.position.set(300,20);
-		this.addChild(object);
+		this.i.position.set(300,20);
+		var container = new protean_display_Container();
+		container.addChild(this.s);
+		var childs = [this.i];
+		var index = 0;
+		var _g = 0;
+		while(_g < childs.length) {
+			var child = childs[_g];
+			++_g;
+			container.addChildAt(child,index++);
+		}
+		container.removeChild(this.i);
+		this.addChild(container);
+		this.c = container;
+		this.addChild(this.i);
 	}
 	,moves: function() {
-		console.log(Global.id);
+		haxe_Log.trace(Global.id,{ fileName : "Test.hx", lineNumber : 46, className : "Test", methodName : "moves"});
 		this.s.x = 100;
 	}
 });
 var display_PImage = function(path) {
 	PIXI.Sprite.call(this,PIXI.Texture.fromImage(Protean.root + path));
 };
+display_PImage.__name__ = true;
 display_PImage.__interfaces__ = [display_PDisplayObject];
 display_PImage.__super__ = PIXI.Sprite;
 display_PImage.prototype = $extend(PIXI.Sprite.prototype,{
@@ -176,6 +202,7 @@ display_PImage.prototype = $extend(PIXI.Sprite.prototype,{
 var display_PShape = function() {
 	PIXI.Graphics.call(this);
 };
+display_PShape.__name__ = true;
 display_PShape.__interfaces__ = [display_PDisplayObject];
 display_PShape.__super__ = PIXI.Graphics;
 display_PShape.prototype = $extend(PIXI.Graphics.prototype,{
@@ -183,12 +210,18 @@ display_PShape.prototype = $extend(PIXI.Graphics.prototype,{
 		return PIXI.Graphics.prototype.lineStyle.call(this,lineWidth == null ? 1 : lineWidth,color == null ? 16711680 : color,alpha == null ? 1 : alpha);
 	}
 });
+var haxe_Log = function() { };
+haxe_Log.__name__ = true;
+haxe_Log.trace = function(v,infos) {
+	js_Boot.__trace(v,infos);
+};
 var haxe_Timer = function(time_ms) {
 	var me = this;
 	this.id = setInterval(function() {
 		me.run();
 	},time_ms);
 };
+haxe_Timer.__name__ = true;
 haxe_Timer.delay = function(f,time_ms) {
 	var t = new haxe_Timer(time_ms);
 	t.run = function() {
@@ -208,20 +241,146 @@ haxe_Timer.prototype = {
 	,run: function() {
 	}
 };
+var js_Boot = function() { };
+js_Boot.__name__ = true;
+js_Boot.__unhtml = function(s) {
+	return s.split("&").join("&amp;").split("<").join("&lt;").split(">").join("&gt;");
+};
+js_Boot.__trace = function(v,i) {
+	var msg = i != null ? i.fileName + ":" + i.lineNumber + ": " : "";
+	msg += js_Boot.__string_rec(v,"");
+	if(i != null && i.customParams != null) {
+		var _g = 0;
+		var _g1 = i.customParams;
+		while(_g < _g1.length) {
+			var v1 = _g1[_g];
+			++_g;
+			msg += "," + js_Boot.__string_rec(v1,"");
+		}
+	}
+	var d;
+	var tmp;
+	if(typeof(document) != "undefined") {
+		d = document.getElementById("haxe:trace");
+		tmp = d != null;
+	} else {
+		tmp = false;
+	}
+	if(tmp) {
+		d.innerHTML += js_Boot.__unhtml(msg) + "<br/>";
+	} else if(typeof console != "undefined" && console.log != null) {
+		console.log(msg);
+	}
+};
+js_Boot.__string_rec = function(o,s) {
+	if(o == null) {
+		return "null";
+	}
+	if(s.length >= 5) {
+		return "<...>";
+	}
+	var t = typeof(o);
+	if(t == "function" && (o.__name__ || o.__ename__)) {
+		t = "object";
+	}
+	switch(t) {
+	case "function":
+		return "<function>";
+	case "object":
+		if(o instanceof Array) {
+			if(o.__enum__) {
+				if(o.length == 2) {
+					return o[0];
+				}
+				var str = o[0] + "(";
+				s += "\t";
+				var _g1 = 2;
+				var _g = o.length;
+				while(_g1 < _g) {
+					var i = _g1++;
+					if(i != 2) {
+						str += "," + js_Boot.__string_rec(o[i],s);
+					} else {
+						str += js_Boot.__string_rec(o[i],s);
+					}
+				}
+				return str + ")";
+			}
+			var l = o.length;
+			var i1;
+			var str1 = "[";
+			s += "\t";
+			var _g11 = 0;
+			var _g2 = l;
+			while(_g11 < _g2) {
+				var i2 = _g11++;
+				str1 += (i2 > 0 ? "," : "") + js_Boot.__string_rec(o[i2],s);
+			}
+			str1 += "]";
+			return str1;
+		}
+		var tostr;
+		try {
+			tostr = o.toString;
+		} catch( e ) {
+			return "???";
+		}
+		if(tostr != null && tostr != Object.toString && typeof(tostr) == "function") {
+			var s2 = o.toString();
+			if(s2 != "[object Object]") {
+				return s2;
+			}
+		}
+		var k = null;
+		var str2 = "{\n";
+		s += "\t";
+		var hasp = o.hasOwnProperty != null;
+		for( var k in o ) {
+		if(hasp && !o.hasOwnProperty(k)) {
+			continue;
+		}
+		if(k == "prototype" || k == "__class__" || k == "__super__" || k == "__interfaces__" || k == "__properties__") {
+			continue;
+		}
+		if(str2.length != 2) {
+			str2 += ", \n";
+		}
+		str2 += s + k + " : " + js_Boot.__string_rec(o[k],s);
+		}
+		s = s.substring(1);
+		str2 += "\n" + s + "}";
+		return str2;
+	case "string":
+		return o;
+	default:
+		return String(o);
+	}
+};
+var protean_display_Container = function() {
+	display_PContainer.call(this);
+};
+protean_display_Container.__name__ = true;
+protean_display_Container.__super__ = display_PContainer;
+protean_display_Container.prototype = $extend(display_PContainer.prototype,{
+});
 var protean_display_Image = function(path) {
 	display_PImage.call(this,path);
 };
+protean_display_Image.__name__ = true;
 protean_display_Image.__super__ = display_PImage;
 protean_display_Image.prototype = $extend(display_PImage.prototype,{
 });
 var protean_display_Shape = function() {
 	display_PShape.call(this);
 };
+protean_display_Shape.__name__ = true;
 protean_display_Shape.__super__ = display_PShape;
 protean_display_Shape.prototype = $extend(display_PShape.prototype,{
 });
 var $_, $fid = 0;
 function $bind(o,m) { if( m == null ) return null; if( m.__id__ == null ) m.__id__ = $fid++; var f; if( o.hx__closures__ == null ) o.hx__closures__ = {}; else f = o.hx__closures__[m.__id__]; if( f == null ) { f = function(){ return f.method.apply(f.scope, arguments); }; f.scope = o; f.method = m; o.hx__closures__[m.__id__] = f; } return f; }
+String.__name__ = true;
+Array.__name__ = true;
 Global.id = "pixi";
 Protean.id = "pixi";
 Protean.root = "assets" + "/";

@@ -1,5 +1,6 @@
 package ;
 
+import protean.display.Container;
 import protean.display.Image;
 import haxe.Timer;
 import protean.display.Shape;
@@ -8,6 +9,9 @@ import protean.Application;
 
 using display.DisplayObjectAPI;
 using display.ShapeAPI;
+#if pixi
+using display.ContainerAPI;
+#end
 
 class Test extends Application {
 	
@@ -23,13 +27,19 @@ class Test extends Application {
 
 	private var s:Shape;
 	private var i:Image;
+	private var c:Container;
 
 	private function drawRect():Void {
 		s = new Shape();
 		s.style().rect(0, 0, 50, 50).setXY(200, 20).setScaling(2).setRotation(Math.PI / 4).addTo(this);
 		Timer.delay(moves, 1000);
 		i = new Image(Protean.id + ".png");
-		i.setXY(300, 20).addTo(this);
+		i.setXY(300, 20);
+		#if pixi
+		c = new Container().insert(s).inserts([i], 0).remove(i).addTo(this);
+		#end
+		i.addTo(this);
+		//trace([s.getX(), s.getY(), s.getScaleX(), s.getScaleY(), s.getScaling(), s.getRotation()]);
 	}
 
 	private function moves():Void {

@@ -1473,6 +1473,10 @@ PApplication.prototype = $extend(display_PContainer.prototype,{
 var Protean = function() { };
 $hxClasses["Protean"] = Protean;
 Protean.__name__ = ["Protean"];
+Protean.routeTrace = function(v,infos) {
+	window.console.log(infos.className + "." + infos.methodName + ":" + infos.lineNumber + ":");
+	window.console.log(v);
+};
 var Reflect = function() { };
 $hxClasses["Reflect"] = Reflect;
 Reflect.__name__ = ["Reflect"];
@@ -1606,6 +1610,7 @@ StringTools.hex = function(n,digits) {
 	return s;
 };
 var protean_Application = function(options) {
+	haxe_Log.trace = Protean.routeTrace;
 	PApplication.call(this,options);
 };
 $hxClasses["protean.Application"] = protean_Application;
@@ -1640,17 +1645,15 @@ Test.prototype = $extend(protean_Application.prototype,{
 		shape.set_scaleY(2);
 		shape.set_rotation(Math.PI / 4 / display_DisplayObjectAPI.PI);
 		this.addChild(shape);
-		shape.set_scaleX(1);
-		shape.set_scaleY(3);
 		haxe_Timer.delay($bind(this,this.moves),1000);
 		this.i = new protean_display_Image(Protean.id + ".png");
 		var object = this.i;
 		object.set_x(300);
 		object.set_y(20);
-		this.addChild(object);
+		this.addChild(this.i);
 	}
 	,moves: function() {
-		console.log(Global.id);
+		haxe_Log.trace(Global.id,{ fileName : "Test.hx", lineNumber : 46, className : "Test", methodName : "moves"});
 		this.s.set_x(100);
 	}
 	,__class__: Test
@@ -2026,6 +2029,12 @@ haxe__$Int64__$_$_$Int64.prototype = {
 	high: null
 	,low: null
 	,__class__: haxe__$Int64__$_$_$Int64
+};
+var haxe_Log = function() { };
+$hxClasses["haxe.Log"] = haxe_Log;
+haxe_Log.__name__ = ["haxe","Log"];
+haxe_Log.trace = function(v,infos) {
+	js_Boot.__trace(v,infos);
 };
 var haxe_Serializer = function() {
 	this.buf = new StringBuf();
@@ -3148,6 +3157,35 @@ js__$Boot_HaxeError.prototype = $extend(Error.prototype,{
 var js_Boot = function() { };
 $hxClasses["js.Boot"] = js_Boot;
 js_Boot.__name__ = ["js","Boot"];
+js_Boot.__unhtml = function(s) {
+	return s.split("&").join("&amp;").split("<").join("&lt;").split(">").join("&gt;");
+};
+js_Boot.__trace = function(v,i) {
+	var msg = i != null ? i.fileName + ":" + i.lineNumber + ": " : "";
+	msg += js_Boot.__string_rec(v,"");
+	if(i != null && i.customParams != null) {
+		var _g = 0;
+		var _g1 = i.customParams;
+		while(_g < _g1.length) {
+			var v1 = _g1[_g];
+			++_g;
+			msg += "," + js_Boot.__string_rec(v1,"");
+		}
+	}
+	var d;
+	var tmp;
+	if(typeof(document) != "undefined") {
+		d = document.getElementById("haxe:trace");
+		tmp = d != null;
+	} else {
+		tmp = false;
+	}
+	if(tmp) {
+		d.innerHTML += js_Boot.__unhtml(msg) + "<br/>";
+	} else if(typeof console != "undefined" && console.log != null) {
+		console.log(msg);
+	}
+};
 js_Boot.getClass = function(o) {
 	if((o instanceof Array) && o.__enum__ == null) {
 		return Array;
@@ -8649,7 +8687,7 @@ var lime_utils_AssetCache = function() {
 	this.audio = new haxe_ds_StringMap();
 	this.font = new haxe_ds_StringMap();
 	this.image = new haxe_ds_StringMap();
-	this.version = 711574;
+	this.version = 796754;
 };
 $hxClasses["lime.utils.AssetCache"] = lime_utils_AssetCache;
 lime_utils_AssetCache.__name__ = ["lime","utils","AssetCache"];

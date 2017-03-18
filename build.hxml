@@ -12,6 +12,7 @@
 # PixiJS
 
 --next
+-D pixi
 -D target=pixi
 -cp targets/pixi
 -lib pixijs:4.3.4

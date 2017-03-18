@@ -1202,6 +1202,10 @@ PApp.prototype = $extend(hxd_App.prototype,{
 var Protean = function() { };
 $hxClasses["Protean"] = Protean;
 Protean.__name__ = true;
+Protean.routeTrace = function(v,infos) {
+	window.console.log(infos.className + "." + infos.methodName + ":" + infos.lineNumber + ":");
+	window.console.log(v);
+};
 var Reflect = function() { };
 $hxClasses["Reflect"] = Reflect;
 Reflect.__name__ = true;
@@ -1321,6 +1325,7 @@ StringTools.hex = function(n,digits) {
 	return s;
 };
 var protean_Application = function(options) {
+	haxe_Log.trace = Protean.routeTrace;
 	PApplication.call(this,options);
 };
 $hxClasses["protean.Application"] = protean_Application;
@@ -1353,17 +1358,15 @@ Test.prototype = $extend(protean_Application.prototype,{
 		shape.set_scaleY(2);
 		shape.set_rotation(Math.PI / 4);
 		this.addChild(shape);
-		shape.set_scaleX(1);
-		shape.set_scaleY(3);
 		haxe_Timer.delay($bind(this,this.moves),1000);
 		this.i = new protean_display_Image(Protean.id + ".png");
 		var object = this.i;
 		object.set_x(300);
 		object.set_y(20);
-		this.addChild(object);
+		this.addChild(this.i);
 	}
 	,moves: function() {
-		haxe_Log.trace(Global.id,{ fileName : "Test.hx", lineNumber : 38, className : "Test", methodName : "moves"});
+		haxe_Log.trace(Global.id,{ fileName : "Test.hx", lineNumber : 46, className : "Test", methodName : "moves"});
 		this.s.set_x(100);
 	}
 	,__class__: Test
