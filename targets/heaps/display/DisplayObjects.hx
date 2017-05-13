@@ -1,5 +1,5 @@
 package display;
-class DisplayObjectAPI {
+class DisplayObjects {
 
 	public static inline function addTo<T:PDisplayObject>(object:T, container:PContainer):T {
 		container.addChild(cast object);

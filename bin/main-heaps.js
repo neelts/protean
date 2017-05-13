@@ -1073,6 +1073,9 @@ h2d_Sprite.prototype = {
 var display_PDisplayObject = function() { };
 $hxClasses["display.PDisplayObject"] = display_PDisplayObject;
 display_PDisplayObject.__name__ = true;
+display_PDisplayObject.prototype = {
+	__class__: display_PDisplayObject
+};
 var display_PContainer = function() {
 	h2d_Sprite.call(this);
 };
@@ -1363,7 +1366,32 @@ Test.prototype = $extend(protean_Application.prototype,{
 		var object = this.i;
 		object.set_x(300);
 		object.set_y(20);
+		var container = new protean_display_Container();
+		container.addChild(this.s);
+		var childs = [this.i];
+		var index = 0;
+		var _g = 0;
+		while(_g < childs.length) {
+			var child = childs[_g];
+			++_g;
+			container.addChildAt(child,index++);
+		}
+		container.removeChild(this.i);
+		this.addChild(container);
+		this.c = container;
+		var container1 = this.c;
+		var end = -1;
+		var childs1 = [];
+		end = container1.childs.length;
+		var _g1 = 0;
+		var _g2 = end;
+		while(_g1 < _g2) childs1.push(container1.childs[_g1++]);
+		haxe_Log.trace(childs1,{ fileName : "Test.hx", lineNumber : 37, className : "Test", methodName : "drawRect"});
+		haxe_Log.trace(display_Containers.getByName(this.c,"shape"),{ fileName : "Test.hx", lineNumber : 38, className : "Test", methodName : "drawRect"});
+		haxe_Log.trace(this.c.childs[0],{ fileName : "Test.hx", lineNumber : 39, className : "Test", methodName : "drawRect"});
 		this.addChild(this.i);
+		var object1 = this.s;
+		haxe_Log.trace([this.s.x,this.s.y,this.s.scaleX,this.s.scaleY,object1.scaleX == object1.scaleY ? object1.scaleX : 0,this.s.rotation],{ fileName : "Test.hx", lineNumber : 42, className : "Test", methodName : "drawRect"});
 	}
 	,moves: function() {
 		haxe_Log.trace(Global.id,{ fileName : "Test.hx", lineNumber : 46, className : "Test", methodName : "moves"});
@@ -1432,6 +1460,21 @@ Type.enumEq = function(a,b) {
 		return false;
 	}
 	return true;
+};
+var display_Containers = function() { };
+$hxClasses["display.Containers"] = display_Containers;
+display_Containers.__name__ = true;
+display_Containers.getByName = function(container,name) {
+	var child;
+	var _g1 = 0;
+	var _g = container.childs.length;
+	while(_g1 < _g) {
+		child = container.childs[_g1++];
+		if(child.name == name) {
+			return child;
+		}
+	}
+	return null;
 };
 var h2d_Drawable = function(parent) {
 	h2d_Sprite.call(this,parent);
@@ -24234,6 +24277,15 @@ js_html_compat_Uint8Array._subarray = function(start,end) {
 	a.byteOffset = start;
 	return a;
 };
+var protean_display_Container = function() {
+	display_PContainer.call(this);
+};
+$hxClasses["protean.display.Container"] = protean_display_Container;
+protean_display_Container.__name__ = true;
+protean_display_Container.__super__ = display_PContainer;
+protean_display_Container.prototype = $extend(display_PContainer.prototype,{
+	__class__: protean_display_Container
+});
 var protean_display_Image = function(path) {
 	display_PImage.call(this,path);
 };

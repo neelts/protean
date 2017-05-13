@@ -896,6 +896,9 @@ openfl_display_DisplayObject.prototype = $extend(openfl_events_EventDispatcher.p
 	,set_name: function(value) {
 		return this.__name = value;
 	}
+	,get_rotation: function() {
+		return this.__rotation;
+	}
 	,set_rotation: function(value) {
 		if(value != this.__rotation) {
 			this.__rotation = value;
@@ -1006,6 +1009,9 @@ openfl_display_DisplayObject.prototype = $extend(openfl_events_EventDispatcher.p
 		}
 		return this.__transform.tx = value;
 	}
+	,get_y: function() {
+		return this.__transform.ty;
+	}
 	,set_y: function(value) {
 		if(value != this.__transform.ty) {
 			if(!this.__transformDirty) {
@@ -1108,6 +1114,24 @@ openfl_display_DisplayObjectContainer.prototype = $extend(openfl_display_Interac
 			}
 		}
 		return child;
+	}
+	,getChildAt: function(index) {
+		if(index >= 0 && index < this.__children.length) {
+			return this.__children[index];
+		}
+		return null;
+	}
+	,getChildByName: function(name) {
+		var _g = 0;
+		var _g1 = this.__children;
+		while(_g < _g1.length) {
+			var child = _g1[_g];
+			++_g;
+			if(child.get_name() == name) {
+				return child;
+			}
+		}
+		return null;
 	}
 	,removeChild: function(child) {
 		if(child != null && child.parent == this) {
@@ -1441,7 +1465,12 @@ var display_PDisplayObject = function() { };
 $hxClasses["display.PDisplayObject"] = display_PDisplayObject;
 display_PDisplayObject.__name__ = ["display","PDisplayObject"];
 display_PDisplayObject.prototype = {
-	__class__: display_PDisplayObject
+	get_x: null
+	,get_y: null
+	,get_scaleX: null
+	,get_scaleY: null
+	,get_rotation: null
+	,__class__: display_PDisplayObject
 };
 var display_PContainer = function() {
 	openfl_display_Sprite.call(this);
@@ -1634,6 +1663,7 @@ Test.prototype = $extend(protean_Application.prototype,{
 	}
 	,s: null
 	,i: null
+	,c: null
 	,drawRect: function() {
 		this.s = new protean_display_Shape();
 		var shape = this.s;
@@ -1643,14 +1673,43 @@ Test.prototype = $extend(protean_Application.prototype,{
 		shape.set_y(20);
 		shape.set_scaleX(2);
 		shape.set_scaleY(2);
-		shape.set_rotation(Math.PI / 4 / display_DisplayObjectAPI.PI);
+		shape.set_rotation(Math.PI / 4 / display_DisplayObjects.PI);
 		this.addChild(shape);
 		haxe_Timer.delay($bind(this,this.moves),1000);
 		this.i = new protean_display_Image(Protean.id + ".png");
 		var object = this.i;
 		object.set_x(300);
 		object.set_y(20);
+		var container = new protean_display_Container();
+		container.addChild(this.s);
+		var childs = [this.i];
+		var index = 0;
+		var _g = 0;
+		while(_g < childs.length) {
+			var child = childs[_g];
+			++_g;
+			container.addChildAt(child,index++);
+		}
+		container.removeChild(this.i);
+		this.addChild(container);
+		this.c = container;
+		var container1 = this.c;
+		var end = -1;
+		var childs1 = [];
+		end = container1.get_numChildren();
+		var _g1 = 0;
+		var _g2 = end;
+		while(_g1 < _g2) childs1.push(container1.getChildAt(_g1++));
+		haxe_Log.trace(childs1,{ fileName : "Test.hx", lineNumber : 37, className : "Test", methodName : "drawRect"});
+		haxe_Log.trace(this.c.getChildByName("shape"),{ fileName : "Test.hx", lineNumber : 38, className : "Test", methodName : "drawRect"});
+		haxe_Log.trace(this.c.getChildAt(0),{ fileName : "Test.hx", lineNumber : 39, className : "Test", methodName : "drawRect"});
 		this.addChild(this.i);
+		var tmp = this.s.get_x();
+		var tmp1 = this.s.get_y();
+		var tmp2 = this.s.get_scaleX();
+		var tmp3 = this.s.get_scaleY();
+		var object1 = this.s;
+		haxe_Log.trace([tmp,tmp1,tmp2,tmp3,object1.get_scaleX() == object1.get_scaleY() ? object1.get_scaleX() : 0,this.s.get_rotation() * display_DisplayObjects.PI],{ fileName : "Test.hx", lineNumber : 42, className : "Test", methodName : "drawRect"});
 	}
 	,moves: function() {
 		haxe_Log.trace(Global.id,{ fileName : "Test.hx", lineNumber : 46, className : "Test", methodName : "moves"});
@@ -1810,9 +1869,9 @@ Type["typeof"] = function(v) {
 		return ValueType.TUnknown;
 	}
 };
-var display_DisplayObjectAPI = function() { };
-$hxClasses["display.DisplayObjectAPI"] = display_DisplayObjectAPI;
-display_DisplayObjectAPI.__name__ = ["display","DisplayObjectAPI"];
+var display_DisplayObjects = function() { };
+$hxClasses["display.DisplayObjects"] = display_DisplayObjects;
+display_DisplayObjects.__name__ = ["display","DisplayObjects"];
 var openfl_display_Bitmap = function(bitmapData,pixelSnapping,smoothing) {
 	if(smoothing == null) {
 		smoothing = false;
@@ -8687,7 +8746,7 @@ var lime_utils_AssetCache = function() {
 	this.audio = new haxe_ds_StringMap();
 	this.font = new haxe_ds_StringMap();
 	this.image = new haxe_ds_StringMap();
-	this.version = 796754;
+	this.version = 402211;
 };
 $hxClasses["lime.utils.AssetCache"] = lime_utils_AssetCache;
 lime_utils_AssetCache.__name__ = ["lime","utils","AssetCache"];
@@ -24814,6 +24873,15 @@ haxe_lang_Iterable.prototype = {
 	iterator: null
 	,__class__: haxe_lang_Iterable
 };
+var protean_display_Container = function() {
+	display_PContainer.call(this);
+};
+$hxClasses["protean.display.Container"] = protean_display_Container;
+protean_display_Container.__name__ = ["protean","display","Container"];
+protean_display_Container.__super__ = display_PContainer;
+protean_display_Container.prototype = $extend(display_PContainer.prototype,{
+	__class__: protean_display_Container
+});
 var protean_display_Image = function(path) {
 	display_PImage.call(this,path);
 };
@@ -24892,7 +24960,7 @@ openfl_display_DisplayObject.__worldRenderDirty = 0;
 openfl_display_DisplayObject.__worldTransformDirty = 0;
 Protean.id = "openfl";
 Protean.root = "assets" + "/";
-display_DisplayObjectAPI.PI = Math.PI / 180;
+display_DisplayObjects.PI = Math.PI / 180;
 haxe_Serializer.USE_CACHE = false;
 haxe_Serializer.USE_ENUM_INDEX = false;
 haxe_Serializer.BASE64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789%:";

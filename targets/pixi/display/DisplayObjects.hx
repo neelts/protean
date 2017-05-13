@@ -1,5 +1,6 @@
 package display;
-class DisplayObjectAPI {
+import pixi.core.display.DisplayObject;
+class DisplayObjects {
 
 	public static inline function addTo<T:PDisplayObject>(object:T, container:PContainer):T {
 		container.addChild(cast object);
@@ -49,4 +50,13 @@ class DisplayObjectAPI {
 		return object.scale.x == object.scale.y ? object.scale.x : 0;
 	}
 	public static inline function getRotation(object:PDisplayObject):Float return object.rotation;
+	
+	public static inline function swap<T:DisplayObject>(target:T, child:T):T {
+		if (target.parent == child.parent) {
+			target.parent.setChildIndex(child, target.parent.getChildIndex(target));
+		} else {
+			throw "Children have different parents!";
+		}
+		return target;
+	}
 }

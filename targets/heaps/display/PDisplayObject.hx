@@ -5,4 +5,5 @@ interface PDisplayObject {
 	public var scaleX(default, set):Float;
 	public var scaleY(default, set):Float;
 	public var rotation(default, set):Float;
+	public var name:String;
 }

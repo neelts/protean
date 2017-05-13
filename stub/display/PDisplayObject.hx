@@ -1,2 +1,3 @@
 package display;
-class PDisplayObject {}
+class PDisplayObject {
+}

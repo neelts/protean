@@ -184,7 +184,12 @@ Test.prototype = $extend(protean_Application.prototype,{
 		container.removeChild(this.i);
 		this.addChild(container);
 		this.c = container;
+		haxe_Log.trace(this.c.children.splice(0,-1),{ fileName : "Test.hx", lineNumber : 37, className : "Test", methodName : "drawRect"});
+		haxe_Log.trace(this.c.getChildByName("shape"),{ fileName : "Test.hx", lineNumber : 38, className : "Test", methodName : "drawRect"});
+		haxe_Log.trace(this.c.getChildAt(0),{ fileName : "Test.hx", lineNumber : 39, className : "Test", methodName : "drawRect"});
 		this.addChild(this.i);
+		var object = this.s;
+		haxe_Log.trace([this.s.x,this.s.y,this.s.scale.x,this.s.scale.y,object.scale.x == object.scale.y ? object.scale.x : 0,this.s.rotation],{ fileName : "Test.hx", lineNumber : 42, className : "Test", methodName : "drawRect"});
 	}
 	,moves: function() {
 		haxe_Log.trace(Global.id,{ fileName : "Test.hx", lineNumber : 46, className : "Test", methodName : "moves"});

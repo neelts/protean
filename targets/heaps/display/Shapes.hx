@@ -1,5 +1,5 @@
 package display;
-class ShapeAPI {
+class Shapes {
 	public static inline function style(shape:PShape, size:Float = 1, color:Int = 0xff0000, alpha:Float = 1):PShape {
 		shape.lineStyle(size, color, alpha);
 		return shape;

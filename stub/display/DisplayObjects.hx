@@ -1,5 +1,5 @@
 package display;
-class DisplayObjectAPI {
+class DisplayObjects {
 	public static inline function addTo(object:PDisplayObject, container:PContainer):PDisplayObject {}
 	public static inline function setX(object:PDisplayObject, y:Float):PDisplayObject {}
 	public static inline function setY(object:PDisplayObject, x:Float):PDisplayObject {}

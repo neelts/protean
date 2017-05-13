@@ -7,11 +7,9 @@ import protean.display.Shape;
 import js.Browser;
 import protean.Application;
 
-using display.DisplayObjectAPI;
-using display.ShapeAPI;
-#if pixi
-using display.ContainerAPI;
-#end
+using display.DisplayObjects;
+using display.Shapes;
+using display.Containers;
 
 class Test extends Application {
 	
@@ -35,11 +33,13 @@ class Test extends Application {
 		Timer.delay(moves, 1000);
 		i = new Image(Protean.id + ".png");
 		i.setXY(300, 20);
-		#if pixi
-		c = new Container().insert(s).inserts([i], 0).remove(i).addTo(this);
-		#end
+		c = new Container().insert(s).inserts([i], 0).delete(i).addTo(this);
+		trace(c.get());
+		trace(c.getByName("shape"));
+		trace(c.getAt(0));
+		//trace(c.swap())
 		i.addTo(this);
-		//trace([s.getX(), s.getY(), s.getScaleX(), s.getScaleY(), s.getScaling(), s.getRotation()]);
+		trace([s.getX(), s.getY(), s.getScaleX(), s.getScaleY(), s.getScaling(), s.getRotation()]);
 	}
 
 	private function moves():Void {

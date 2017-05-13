@@ -1,5 +1,5 @@
 package display;
-class DisplayObjectAPI {
+class DisplayObjects {
 
 	private static var PI:Float = (Math.PI / 180);
 
