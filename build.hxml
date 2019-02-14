@@ -1,7 +1,7 @@
 -cp samples/test
 -cp src
 -cp bin
--main Fractals
+-main Test
 -dce full
 -D analyzer-optimize
 -D assetsRoot=assets

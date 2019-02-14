@@ -30,6 +30,154 @@ EReg.prototype = {
 	}
 	,__class__: EReg
 };
+var Global = function() { };
+$hxClasses["Global"] = Global;
+Global.__name__ = ["Global"];
+var HxOverrides = function() { };
+$hxClasses["HxOverrides"] = HxOverrides;
+HxOverrides.__name__ = ["HxOverrides"];
+HxOverrides.strDate = function(s) {
+	var _g = s.length;
+	switch(_g) {
+	case 8:
+		var k = s.split(":");
+		var d = new Date();
+		d["setTime"](0);
+		d["setUTCHours"](k[0]);
+		d["setUTCMinutes"](k[1]);
+		d["setUTCSeconds"](k[2]);
+		return d;
+	case 10:
+		var k1 = s.split("-");
+		return new Date(k1[0],k1[1] - 1,k1[2],0,0,0);
+	case 19:
+		var k2 = s.split(" ");
+		var y = k2[0].split("-");
+		var t = k2[1].split(":");
+		return new Date(y[0],y[1] - 1,y[2],t[0],t[1],t[2]);
+	default:
+		throw new js__$Boot_HaxeError("Invalid date format : " + s);
+	}
+};
+HxOverrides.cca = function(s,index) {
+	var x = s.charCodeAt(index);
+	if(x != x) {
+		return undefined;
+	}
+	return x;
+};
+HxOverrides.substr = function(s,pos,len) {
+	if(len == null) {
+		len = s.length;
+	} else if(len < 0) {
+		if(pos == 0) {
+			len = s.length + len;
+		} else {
+			return "";
+		}
+	}
+	return s.substr(pos,len);
+};
+HxOverrides.remove = function(a,obj) {
+	var i = a.indexOf(obj);
+	if(i == -1) {
+		return false;
+	}
+	a.splice(i,1);
+	return true;
+};
+HxOverrides.iter = function(a) {
+	return { cur : 0, arr : a, hasNext : function() {
+		return this.cur < this.arr.length;
+	}, next : function() {
+		return this.arr[this.cur++];
+	}};
+};
+var Lambda = function() { };
+$hxClasses["Lambda"] = Lambda;
+Lambda.__name__ = ["Lambda"];
+Lambda.array = function(it) {
+	var a = [];
+	var i = $iterator(it)();
+	while(i.hasNext()) a.push(i.next());
+	return a;
+};
+var List = function() {
+	this.length = 0;
+};
+$hxClasses["List"] = List;
+List.__name__ = ["List"];
+List.prototype = {
+	add: function(item) {
+		var x = new _$List_ListNode(item,null);
+		if(this.h == null) {
+			this.h = x;
+		} else {
+			this.q.next = x;
+		}
+		this.q = x;
+		this.length++;
+	}
+	,push: function(item) {
+		var x = new _$List_ListNode(item,this.h);
+		this.h = x;
+		if(this.q == null) {
+			this.q = x;
+		}
+		this.length++;
+	}
+	,remove: function(v) {
+		var prev = null;
+		var l = this.h;
+		while(l != null) {
+			if(l.item == v) {
+				if(prev == null) {
+					this.h = l.next;
+				} else {
+					prev.next = l.next;
+				}
+				if(this.q == l) {
+					this.q = prev;
+				}
+				this.length--;
+				return true;
+			}
+			prev = l;
+			l = l.next;
+		}
+		return false;
+	}
+	,iterator: function() {
+		return new _$List_ListIterator(this.h);
+	}
+	,__class__: List
+};
+var _$List_ListNode = function(item,next) {
+	this.item = item;
+	this.next = next;
+};
+$hxClasses["_List.ListNode"] = _$List_ListNode;
+_$List_ListNode.__name__ = ["_List","ListNode"];
+_$List_ListNode.prototype = {
+	__class__: _$List_ListNode
+};
+var _$List_ListIterator = function(head) {
+	this.head = head;
+};
+$hxClasses["_List.ListIterator"] = _$List_ListIterator;
+_$List_ListIterator.__name__ = ["_List","ListIterator"];
+_$List_ListIterator.prototype = {
+	hasNext: function() {
+		return this.head != null;
+	}
+	,next: function() {
+		var val = this.head.item;
+		this.head = this.head.next;
+		return val;
+	}
+	,__class__: _$List_ListIterator
+};
+Math.__name__ = ["Math"];
 var h2d_Object = function(parent) {
 	this.alpha = 1.;
 	this.matA = 1;
@@ -949,259 +1097,6 @@ PApplication.prototype = $extend(display_PContainer.prototype,{
 	}
 	,__class__: PApplication
 });
-var protean_Application = function(options) {
-	haxe_Log.trace = Protean.routeTrace;
-	PApplication.call(this,options);
-};
-$hxClasses["protean.Application"] = protean_Application;
-protean_Application.__name__ = ["protean","Application"];
-protean_Application.__super__ = PApplication;
-protean_Application.prototype = $extend(PApplication.prototype,{
-	__class__: protean_Application
-});
-var Fractals = function() {
-	protean_Application.call(this,{ parentDOM : window.document.getElementById(Protean.id), backgroundColor : 0});
-};
-$hxClasses["Fractals"] = Fractals;
-Fractals.__name__ = ["Fractals"];
-Fractals.main = function() {
-	new Fractals();
-};
-Fractals.__super__ = protean_Application;
-Fractals.prototype = $extend(protean_Application.prototype,{
-	onReady: function() {
-		haxe_Log.trace("!!!",{ fileName : "Fractals.hx", lineNumber : 29, className : "Fractals", methodName : "onReady"});
-		this.current = this;
-		window.document.addEventListener("click",$bind(this,this.onClick));
-		window.document.addEventListener("keyup",$bind(this,this.onKeyUp));
-	}
-	,onKeyUp: function(e) {
-		if(e.keyCode == 13) {
-			this.build();
-		}
-	}
-	,build: function() {
-		var cs = [];
-		var _g1 = 0;
-		var _g = this.current.children.length;
-		while(_g1 < _g) {
-			var cc = this.current.children[_g1++];
-			if(js_Boot.__instanceof(cc,display_PContainer)) {
-				cs.push(cc);
-			}
-		}
-		haxe_Log.trace(cs,{ fileName : "Fractals.hx", lineNumber : 45, className : "Fractals", methodName : "build"});
-		var qe = [];
-		qe = cs.slice();
-		while(qe.length > 0) {
-			var c = qe.pop();
-			var _g2 = 0;
-			while(_g2 < cs.length) {
-				var s = cs[_g2];
-				++_g2;
-				if(Fractals.I-- > 0) {
-					var object = this.getFigure();
-					var y = s.y;
-					object.set_x(s.x);
-					object.set_y(y);
-					var scale = s.scaleX == s.scaleY ? s.scaleX : 0;
-					object.set_scaleX(scale);
-					object.set_scaleY(scale);
-					object.set_rotation(s.rotation);
-					c.addChild(object);
-					qe.unshift(object);
-				}
-			}
-		}
-	}
-	,onClick: function(e) {
-		var object = this.getFigure();
-		this.current.addChild(object);
-		if(this.current == this) {
-			var y = e.clientY;
-			object.set_x(e.clientX);
-			object.set_y(y);
-			this.current = object;
-		} else {
-			var y1 = e.clientY - this.current.y;
-			object.set_x(e.clientX - this.current.x);
-			object.set_y(y1);
-			object.set_scaleX(0.7);
-			object.set_scaleY(0.7);
-		}
-	}
-	,getFigure: function() {
-		return new Figure();
-	}
-	,__class__: Fractals
-});
-var Figure = function() {
-	display_PContainer.call(this);
-	var s = new display_PShape();
-	s.lineStyle(10,16711680,1);
-	s.beginFill(0,1);
-	s.drawRect(-200,-200,400,400);
-	var scale = Math.random() * .3 + .3;
-	s.set_scaleX(scale);
-	s.set_scaleY(scale);
-	this.addChild(s);
-	this.set_rotation(Math.PI * Math.random());
-	new haxe_Timer(100).run = $bind(this,this.update);
-};
-$hxClasses["Figure"] = Figure;
-Figure.__name__ = ["Figure"];
-Figure.__super__ = display_PContainer;
-Figure.prototype = $extend(display_PContainer.prototype,{
-	update: function() {
-		this.set_rotation(this.rotation + .05);
-	}
-	,__class__: Figure
-});
-var HxOverrides = function() { };
-$hxClasses["HxOverrides"] = HxOverrides;
-HxOverrides.__name__ = ["HxOverrides"];
-HxOverrides.strDate = function(s) {
-	var _g = s.length;
-	switch(_g) {
-	case 8:
-		var k = s.split(":");
-		var d = new Date();
-		d["setTime"](0);
-		d["setUTCHours"](k[0]);
-		d["setUTCMinutes"](k[1]);
-		d["setUTCSeconds"](k[2]);
-		return d;
-	case 10:
-		var k1 = s.split("-");
-		return new Date(k1[0],k1[1] - 1,k1[2],0,0,0);
-	case 19:
-		var k2 = s.split(" ");
-		var y = k2[0].split("-");
-		var t = k2[1].split(":");
-		return new Date(y[0],y[1] - 1,y[2],t[0],t[1],t[2]);
-	default:
-		throw new js__$Boot_HaxeError("Invalid date format : " + s);
-	}
-};
-HxOverrides.cca = function(s,index) {
-	var x = s.charCodeAt(index);
-	if(x != x) {
-		return undefined;
-	}
-	return x;
-};
-HxOverrides.substr = function(s,pos,len) {
-	if(len == null) {
-		len = s.length;
-	} else if(len < 0) {
-		if(pos == 0) {
-			len = s.length + len;
-		} else {
-			return "";
-		}
-	}
-	return s.substr(pos,len);
-};
-HxOverrides.remove = function(a,obj) {
-	var i = a.indexOf(obj);
-	if(i == -1) {
-		return false;
-	}
-	a.splice(i,1);
-	return true;
-};
-HxOverrides.iter = function(a) {
-	return { cur : 0, arr : a, hasNext : function() {
-		return this.cur < this.arr.length;
-	}, next : function() {
-		return this.arr[this.cur++];
-	}};
-};
-var Lambda = function() { };
-$hxClasses["Lambda"] = Lambda;
-Lambda.__name__ = ["Lambda"];
-Lambda.array = function(it) {
-	var a = [];
-	var i = $iterator(it)();
-	while(i.hasNext()) a.push(i.next());
-	return a;
-};
-var List = function() {
-	this.length = 0;
-};
-$hxClasses["List"] = List;
-List.__name__ = ["List"];
-List.prototype = {
-	add: function(item) {
-		var x = new _$List_ListNode(item,null);
-		if(this.h == null) {
-			this.h = x;
-		} else {
-			this.q.next = x;
-		}
-		this.q = x;
-		this.length++;
-	}
-	,push: function(item) {
-		var x = new _$List_ListNode(item,this.h);
-		this.h = x;
-		if(this.q == null) {
-			this.q = x;
-		}
-		this.length++;
-	}
-	,remove: function(v) {
-		var prev = null;
-		var l = this.h;
-		while(l != null) {
-			if(l.item == v) {
-				if(prev == null) {
-					this.h = l.next;
-				} else {
-					prev.next = l.next;
-				}
-				if(this.q == l) {
-					this.q = prev;
-				}
-				this.length--;
-				return true;
-			}
-			prev = l;
-			l = l.next;
-		}
-		return false;
-	}
-	,iterator: function() {
-		return new _$List_ListIterator(this.h);
-	}
-	,__class__: List
-};
-var _$List_ListNode = function(item,next) {
-	this.item = item;
-	this.next = next;
-};
-$hxClasses["_List.ListNode"] = _$List_ListNode;
-_$List_ListNode.__name__ = ["_List","ListNode"];
-_$List_ListNode.prototype = {
-	__class__: _$List_ListNode
-};
-var _$List_ListIterator = function(head) {
-	this.head = head;
-};
-$hxClasses["_List.ListIterator"] = _$List_ListIterator;
-_$List_ListIterator.__name__ = ["_List","ListIterator"];
-_$List_ListIterator.prototype = {
-	hasNext: function() {
-		return this.head != null;
-	}
-	,next: function() {
-		var val = this.head.item;
-		this.head = this.head.next;
-		return val;
-	}
-	,__class__: _$List_ListIterator
-};
-Math.__name__ = ["Math"];
 var h3d_IDrawable = function() { };
 $hxClasses["h3d.IDrawable"] = h3d_IDrawable;
 h3d_IDrawable.__name__ = ["h3d","IDrawable"];
@@ -1408,6 +1303,92 @@ StringTools.rtrim = function(s) {
 StringTools.trim = function(s) {
 	return StringTools.ltrim(StringTools.rtrim(s));
 };
+StringTools.hex = function(n,digits) {
+	var s = "";
+	while(true) {
+		s = "0123456789ABCDEF".charAt(n & 15) + s;
+		n >>>= 4;
+		if(!(n > 0)) {
+			break;
+		}
+	}
+	if(digits != null) {
+		while(s.length < digits) s = "0" + s;
+	}
+	return s;
+};
+var protean_Application = function(options) {
+	haxe_Log.trace = Protean.routeTrace;
+	PApplication.call(this,options);
+};
+$hxClasses["protean.Application"] = protean_Application;
+protean_Application.__name__ = ["protean","Application"];
+protean_Application.__super__ = PApplication;
+protean_Application.prototype = $extend(PApplication.prototype,{
+	__class__: protean_Application
+});
+var Test = function() {
+	protean_Application.call(this,{ parentDOM : window.document.getElementById(Protean.id), backgroundColor : 0});
+};
+$hxClasses["Test"] = Test;
+Test.__name__ = ["Test"];
+Test.main = function() {
+	new Test();
+};
+Test.__super__ = protean_Application;
+Test.prototype = $extend(protean_Application.prototype,{
+	onReady: function() {
+		this.drawRect();
+	}
+	,drawRect: function() {
+		this.s = new display_PShape();
+		var shape = this.s;
+		shape.lineStyle(1,16711680,1);
+		shape.drawRect(0,0,50,50);
+		shape.set_x(200);
+		shape.set_y(20);
+		shape.set_scaleX(2);
+		shape.set_scaleY(2);
+		shape.set_rotation(Math.PI / 4);
+		this.addChild(shape);
+		haxe_Timer.delay($bind(this,this.moves),1000);
+		this.i = new display_PImage(Protean.id + ".png");
+		var object = this.i;
+		object.set_x(300);
+		object.set_y(20);
+		var container = new display_PContainer();
+		container.addChild(this.s);
+		var childs = [this.i];
+		var index = 0;
+		var _g = 0;
+		while(_g < childs.length) {
+			var child = childs[_g];
+			++_g;
+			container.addChildAt(child,index++);
+		}
+		container.removeChild(this.i);
+		this.addChild(container);
+		this.c = container;
+		var container1 = this.c;
+		var end = -1;
+		var childs1 = [];
+		end = container1.children.length;
+		var _g1 = 0;
+		var _g2 = end;
+		while(_g1 < _g2) childs1.push(container1.children[_g1++]);
+		haxe_Log.trace(childs1,{ fileName : "Test.hx", lineNumber : 37, className : "Test", methodName : "drawRect"});
+		haxe_Log.trace(display_Containers.getByName(this.c,"shape"),{ fileName : "Test.hx", lineNumber : 38, className : "Test", methodName : "drawRect"});
+		haxe_Log.trace(this.c.children[0],{ fileName : "Test.hx", lineNumber : 39, className : "Test", methodName : "drawRect"});
+		this.addChild(this.i);
+		var object1 = this.s;
+		haxe_Log.trace([this.s.x,this.s.y,this.s.scaleX,this.s.scaleY,object1.scaleX == object1.scaleY ? object1.scaleX : 0,this.s.rotation],{ fileName : "Test.hx", lineNumber : 41, className : "Test", methodName : "drawRect"});
+	}
+	,moves: function() {
+		haxe_Log.trace(Global.id,{ fileName : "Test.hx", lineNumber : 45, className : "Test", methodName : "moves"});
+		this.s.set_x(100);
+	}
+	,__class__: Test
+});
 var Type = function() { };
 $hxClasses["Type"] = Type;
 Type.__name__ = ["Type"];
@@ -1524,6 +1505,21 @@ Type.enumEq = function(a,b) {
 	}
 	return true;
 };
+var display_Containers = function() { };
+$hxClasses["display.Containers"] = display_Containers;
+display_Containers.__name__ = ["display","Containers"];
+display_Containers.getByName = function(container,name) {
+	var child;
+	var _g1 = 0;
+	var _g = container.children.length;
+	while(_g1 < _g) {
+		child = container.children[_g1++];
+		if(child.name == name) {
+			return child;
+		}
+	}
+	return null;
+};
 var h2d_Drawable = function(parent) {
 	h2d_Object.call(this,parent);
 	this.blendMode = h2d_BlendMode.Alpha;
@@ -1543,6 +1539,35 @@ h2d_Drawable.prototype = $extend(h2d_Object.prototype,{
 		return;
 	}
 	,__class__: h2d_Drawable
+});
+var h2d_Bitmap = function(tile,parent) {
+	h2d_Drawable.call(this,parent);
+	this.tile = tile;
+};
+$hxClasses["h2d.Bitmap"] = h2d_Bitmap;
+h2d_Bitmap.__name__ = ["h2d","Bitmap"];
+h2d_Bitmap.__super__ = h2d_Drawable;
+h2d_Bitmap.prototype = $extend(h2d_Drawable.prototype,{
+	getBoundsRec: function(relativeTo,out,forSize) {
+		h2d_Drawable.prototype.getBoundsRec.call(this,relativeTo,out,forSize);
+		if(this.tile != null) {
+			this.addBounds(relativeTo,out,this.tile.dx,this.tile.dy,this.tile.width,this.tile.height);
+		}
+	}
+	,draw: function(ctx) {
+		this.emitTile(ctx,this.tile);
+	}
+	,__class__: h2d_Bitmap
+});
+var display_PImage = function(path) {
+	h2d_Bitmap.call(this,hxd_res_Loader.currentInstance.load(path).toImage().toTile());
+};
+$hxClasses["display.PImage"] = display_PImage;
+display_PImage.__name__ = ["display","PImage"];
+display_PImage.__interfaces__ = [display_PDisplayObject];
+display_PImage.__super__ = h2d_Bitmap;
+display_PImage.prototype = $extend(h2d_Bitmap.prototype,{
+	__class__: display_PImage
 });
 var h2d_Graphics = function(parent) {
 	this.bevel = 0.25;
@@ -2514,20 +2539,6 @@ h2d_Graphics.prototype = $extend(h2d_Drawable.prototype,{
 		}
 		this.tmpPoints = [];
 	}
-	,beginFill: function(color,alpha) {
-		if(alpha == null) {
-			alpha = 1.;
-		}
-		if(color == null) {
-			color = 0;
-		}
-		this.flush();
-		this.curA = alpha;
-		this.curR = (color >> 16 & 255) / 255.;
-		this.curG = (color >> 8 & 255) / 255.;
-		this.curB = (color & 255) / 255.;
-		this.doFill = true;
-	}
 	,lineStyle: function(size,color,alpha) {
 		if(alpha == null) {
 			alpha = 1.;
@@ -2696,6 +2707,1584 @@ display_PShape.__super__ = h2d_Graphics;
 display_PShape.prototype = $extend(h2d_Graphics.prototype,{
 	__class__: display_PShape
 });
+var format_gif_Block = $hxClasses["format.gif.Block"] = { __ename__ : true, __constructs__ : ["BFrame","BExtension","BEOF"] };
+format_gif_Block.BFrame = function(frame) { var $x = ["BFrame",0,frame]; $x.__enum__ = format_gif_Block; $x.toString = $estr; return $x; };
+format_gif_Block.BExtension = function(extension) { var $x = ["BExtension",1,extension]; $x.__enum__ = format_gif_Block; $x.toString = $estr; return $x; };
+format_gif_Block.BEOF = ["BEOF",2];
+format_gif_Block.BEOF.toString = $estr;
+format_gif_Block.BEOF.__enum__ = format_gif_Block;
+format_gif_Block.__empty_constructs__ = [format_gif_Block.BEOF];
+var format_gif_Extension = $hxClasses["format.gif.Extension"] = { __ename__ : true, __constructs__ : ["EGraphicControl","EComment","EText","EApplicationExtension","EUnknown"] };
+format_gif_Extension.EGraphicControl = function(gce) { var $x = ["EGraphicControl",0,gce]; $x.__enum__ = format_gif_Extension; $x.toString = $estr; return $x; };
+format_gif_Extension.EComment = function(text) { var $x = ["EComment",1,text]; $x.__enum__ = format_gif_Extension; $x.toString = $estr; return $x; };
+format_gif_Extension.EText = function(pte) { var $x = ["EText",2,pte]; $x.__enum__ = format_gif_Extension; $x.toString = $estr; return $x; };
+format_gif_Extension.EApplicationExtension = function(ext) { var $x = ["EApplicationExtension",3,ext]; $x.__enum__ = format_gif_Extension; $x.toString = $estr; return $x; };
+format_gif_Extension.EUnknown = function(id,data) { var $x = ["EUnknown",4,id,data]; $x.__enum__ = format_gif_Extension; $x.toString = $estr; return $x; };
+format_gif_Extension.__empty_constructs__ = [];
+var format_gif_ApplicationExtension = $hxClasses["format.gif.ApplicationExtension"] = { __ename__ : true, __constructs__ : ["AENetscapeLooping","AEUnknown"] };
+format_gif_ApplicationExtension.AENetscapeLooping = function(loops) { var $x = ["AENetscapeLooping",0,loops]; $x.__enum__ = format_gif_ApplicationExtension; $x.toString = $estr; return $x; };
+format_gif_ApplicationExtension.AEUnknown = function(name,version,data) { var $x = ["AEUnknown",1,name,version,data]; $x.__enum__ = format_gif_ApplicationExtension; $x.toString = $estr; return $x; };
+format_gif_ApplicationExtension.__empty_constructs__ = [];
+var format_gif_Version = $hxClasses["format.gif.Version"] = { __ename__ : true, __constructs__ : ["GIF87a","GIF89a","Unknown"] };
+format_gif_Version.GIF87a = ["GIF87a",0];
+format_gif_Version.GIF87a.toString = $estr;
+format_gif_Version.GIF87a.__enum__ = format_gif_Version;
+format_gif_Version.GIF89a = ["GIF89a",1];
+format_gif_Version.GIF89a.toString = $estr;
+format_gif_Version.GIF89a.__enum__ = format_gif_Version;
+format_gif_Version.Unknown = function(version) { var $x = ["Unknown",2,version]; $x.__enum__ = format_gif_Version; $x.toString = $estr; return $x; };
+format_gif_Version.__empty_constructs__ = [format_gif_Version.GIF87a,format_gif_Version.GIF89a];
+var format_gif_DisposalMethod = $hxClasses["format.gif.DisposalMethod"] = { __ename__ : true, __constructs__ : ["UNSPECIFIED","NO_ACTION","FILL_BACKGROUND","RENDER_PREVIOUS","UNDEFINED"] };
+format_gif_DisposalMethod.UNSPECIFIED = ["UNSPECIFIED",0];
+format_gif_DisposalMethod.UNSPECIFIED.toString = $estr;
+format_gif_DisposalMethod.UNSPECIFIED.__enum__ = format_gif_DisposalMethod;
+format_gif_DisposalMethod.NO_ACTION = ["NO_ACTION",1];
+format_gif_DisposalMethod.NO_ACTION.toString = $estr;
+format_gif_DisposalMethod.NO_ACTION.__enum__ = format_gif_DisposalMethod;
+format_gif_DisposalMethod.FILL_BACKGROUND = ["FILL_BACKGROUND",2];
+format_gif_DisposalMethod.FILL_BACKGROUND.toString = $estr;
+format_gif_DisposalMethod.FILL_BACKGROUND.__enum__ = format_gif_DisposalMethod;
+format_gif_DisposalMethod.RENDER_PREVIOUS = ["RENDER_PREVIOUS",3];
+format_gif_DisposalMethod.RENDER_PREVIOUS.toString = $estr;
+format_gif_DisposalMethod.RENDER_PREVIOUS.__enum__ = format_gif_DisposalMethod;
+format_gif_DisposalMethod.UNDEFINED = function(index) { var $x = ["UNDEFINED",4,index]; $x.__enum__ = format_gif_DisposalMethod; $x.toString = $estr; return $x; };
+format_gif_DisposalMethod.__empty_constructs__ = [format_gif_DisposalMethod.UNSPECIFIED,format_gif_DisposalMethod.NO_ACTION,format_gif_DisposalMethod.FILL_BACKGROUND,format_gif_DisposalMethod.RENDER_PREVIOUS];
+var format_gif_Reader = function(i) {
+	this.i = i;
+	i.set_bigEndian(false);
+};
+$hxClasses["format.gif.Reader"] = format_gif_Reader;
+format_gif_Reader.__name__ = ["format","gif","Reader"];
+format_gif_Reader.prototype = {
+	read: function() {
+		var _g = 0;
+		var _g1 = [71,73,70];
+		while(_g < _g1.length) {
+			var b = _g1[_g];
+			++_g;
+			if(this.i.readByte() != b) {
+				throw new js__$Boot_HaxeError("Invalid header");
+			}
+		}
+		var gifVer = this.i.readString(3);
+		var version = format_gif_Version.GIF89a;
+		switch(gifVer) {
+		case "87a":
+			version = format_gif_Version.GIF87a;
+			break;
+		case "89a":
+			version = format_gif_Version.GIF89a;
+			break;
+		default:
+			version = format_gif_Version.Unknown(gifVer);
+		}
+		var width = this.i.readUInt16();
+		var height = this.i.readUInt16();
+		var packedField = this.i.readByte();
+		var bgIndex = this.i.readByte();
+		var pixelAspectRatio = this.i.readByte();
+		if(pixelAspectRatio != 0) {
+			pixelAspectRatio = (pixelAspectRatio + 15) / 64;
+		} else {
+			pixelAspectRatio = 1;
+		}
+		var lsd = { width : width, height : height, hasGlobalColorTable : (packedField & 128) == 128, colorResolution : (packedField & 112) >>> 4, sorted : (packedField & 8) == 8, globalColorTableSize : 2 << (packedField & 7), backgroundColorIndex : bgIndex, pixelAspectRatio : pixelAspectRatio};
+		var gct = null;
+		if(lsd.hasGlobalColorTable) {
+			gct = this.readColorTable(lsd.globalColorTableSize);
+		}
+		var blocks = new List();
+		while(true) {
+			var b1 = this.readBlock();
+			blocks.add(b1);
+			if(b1 == format_gif_Block.BEOF) {
+				break;
+			}
+		}
+		return { version : version, logicalScreenDescriptor : lsd, globalColorTable : gct, blocks : blocks};
+	}
+	,readBlock: function() {
+		switch(this.i.readByte()) {
+		case 33:
+			return this.readExtension();
+		case 44:
+			return this.readImage();
+		case 59:
+			return format_gif_Block.BEOF;
+		}
+		return format_gif_Block.BEOF;
+	}
+	,readImage: function() {
+		var x = this.i.readUInt16();
+		var y = this.i.readUInt16();
+		var width = this.i.readUInt16();
+		var height = this.i.readUInt16();
+		var packed = this.i.readByte();
+		var localColorTable = (packed & 128) == 128;
+		var interlaced = (packed & 64) == 64;
+		var localColorTableSize = 2 << (packed & 7);
+		var lct = null;
+		if(localColorTable) {
+			lct = this.readColorTable(localColorTableSize);
+		}
+		return format_gif_Block.BFrame({ x : x, y : y, width : width, height : height, localColorTable : localColorTable, interlaced : interlaced, sorted : (packed & 32) == 32, localColorTableSize : localColorTableSize, pixels : this.readPixels(width,height,interlaced), colorTable : lct});
+	}
+	,readPixels: function(width,height,interlaced) {
+		var input = this.i;
+		var pixelsCount = width * height;
+		var pixels = new haxe_io_Bytes(new ArrayBuffer(pixelsCount));
+		var minCodeSize = input.readByte();
+		var blockSize = input.readByte() - 1;
+		var bits = input.readByte();
+		var bitsCount = 8;
+		var clearCode = 1 << minCodeSize;
+		var eoiCode = clearCode + 1;
+		var codeSize = minCodeSize + 1;
+		var codeSizeLimit = 1 << codeSize;
+		var codeMask = codeSizeLimit - 1;
+		var baseDict = [];
+		var _g1 = 0;
+		while(_g1 < clearCode) {
+			var i = _g1++;
+			baseDict[i] = [i];
+		}
+		var dict = [];
+		var dictLen = clearCode + 2;
+		var newRecord;
+		var i1 = 0;
+		var code = 0;
+		var last;
+		while(i1 < pixelsCount) {
+			last = code;
+			while(bitsCount < codeSize) {
+				if(blockSize == 0) {
+					break;
+				}
+				bits |= input.readByte() << bitsCount;
+				bitsCount += 8;
+				--blockSize;
+				if(blockSize == 0) {
+					blockSize = input.readByte();
+				}
+			}
+			code = bits & codeMask;
+			bits >>= codeSize;
+			bitsCount -= codeSize;
+			if(code == clearCode) {
+				dict = baseDict.slice();
+				dictLen = clearCode + 2;
+				codeSize = minCodeSize + 1;
+				codeSizeLimit = 1 << codeSize;
+				codeMask = codeSizeLimit - 1;
+				continue;
+			}
+			if(code == eoiCode) {
+				break;
+			}
+			if(code < dictLen) {
+				if(last != clearCode) {
+					newRecord = dict[last].slice();
+					newRecord.push(dict[code][0]);
+					dict[dictLen++] = newRecord;
+				}
+			} else {
+				if(code != dictLen) {
+					throw new js__$Boot_HaxeError("Invalid LZW code. Excepted: " + dictLen + ", got: " + code);
+				}
+				newRecord = dict[last].slice();
+				newRecord.push(newRecord[0]);
+				dict[dictLen++] = newRecord;
+			}
+			newRecord = dict[code];
+			var _g = 0;
+			while(_g < newRecord.length) {
+				var item = newRecord[_g];
+				++_g;
+				pixels.b[i1++] = item & 255;
+			}
+			if(dictLen == codeSizeLimit && codeSize < 12) {
+				++codeSize;
+				codeSizeLimit = 1 << codeSize;
+				codeMask = codeSizeLimit - 1;
+			}
+		}
+		while(blockSize > 0) {
+			input.readByte();
+			--blockSize;
+			if(blockSize == 0) {
+				blockSize = input.readByte();
+			}
+		}
+		while(i1 < pixelsCount) pixels.b[i1++] = 0;
+		if(interlaced) {
+			var buffer = new haxe_io_Bytes(new ArrayBuffer(pixelsCount));
+			var offset = this.deinterlace(pixels,buffer,8,0,0,width,height);
+			offset = this.deinterlace(pixels,buffer,8,4,offset,width,height);
+			offset = this.deinterlace(pixels,buffer,4,2,offset,width,height);
+			this.deinterlace(pixels,buffer,2,1,offset,width,height);
+			pixels = buffer;
+		}
+		return pixels;
+	}
+	,deinterlace: function(input,output,step,y,offset,width,height) {
+		while(y < height) {
+			output.blit(y * width,input,offset,width);
+			offset += width;
+			y += step;
+		}
+		return offset;
+	}
+	,readExtension: function() {
+		var subId = this.i.readByte();
+		switch(subId) {
+		case 1:
+			if(this.i.readByte() != 12) {
+				throw new js__$Boot_HaxeError("Incorrect size of Plain Text Extension introducer block.");
+			}
+			var tmp = this.i.readUInt16();
+			var tmp1 = this.i.readUInt16();
+			var tmp2 = this.i.readUInt16();
+			var tmp3 = this.i.readUInt16();
+			var tmp4 = this.i.readByte();
+			var tmp5 = this.i.readByte();
+			var tmp6 = this.i.readByte();
+			var tmp7 = this.i.readByte();
+			var buffer = new haxe_io_BytesOutput();
+			var bytes = new haxe_io_Bytes(new ArrayBuffer(255));
+			var len = this.i.readByte();
+			while(len != 0) {
+				this.i.readBytes(bytes,0,len);
+				buffer.writeBytes(bytes,0,len);
+				len = this.i.readByte();
+			}
+			bytes = buffer.getBytes();
+			return format_gif_Block.BExtension(format_gif_Extension.EText({ textGridX : tmp, textGridY : tmp1, textGridWidth : tmp2, textGridHeight : tmp3, charCellWidth : tmp4, charCellHeight : tmp5, textForegroundColorIndex : tmp6, textBackgroundColorIndex : tmp7, text : bytes.toString()}));
+		case 249:
+			if(this.i.readByte() != 4) {
+				throw new js__$Boot_HaxeError("Incorrect Graphic Control Extension block size!");
+			}
+			var packed = this.i.readByte();
+			var disposalMethod;
+			switch((packed & 28) >> 2) {
+			case 0:
+				disposalMethod = format_gif_DisposalMethod.UNSPECIFIED;
+				break;
+			case 1:
+				disposalMethod = format_gif_DisposalMethod.NO_ACTION;
+				break;
+			case 2:
+				disposalMethod = format_gif_DisposalMethod.FILL_BACKGROUND;
+				break;
+			case 3:
+				disposalMethod = format_gif_DisposalMethod.RENDER_PREVIOUS;
+				break;
+			default:
+				disposalMethod = format_gif_DisposalMethod.UNDEFINED((packed & 28) >> 2);
+			}
+			var b = format_gif_Block.BExtension(format_gif_Extension.EGraphicControl({ disposalMethod : disposalMethod, userInput : (packed & 2) == 2, hasTransparentColor : (packed & 1) == 1, delay : this.i.readUInt16(), transparentIndex : this.i.readByte()}));
+			this.i.readByte();
+			return b;
+		case 254:
+			var buffer1 = new haxe_io_BytesOutput();
+			var bytes1 = new haxe_io_Bytes(new ArrayBuffer(255));
+			var len1 = this.i.readByte();
+			while(len1 != 0) {
+				this.i.readBytes(bytes1,0,len1);
+				buffer1.writeBytes(bytes1,0,len1);
+				len1 = this.i.readByte();
+			}
+			bytes1 = buffer1.getBytes();
+			return format_gif_Block.BExtension(format_gif_Extension.EComment(bytes1.toString()));
+		case 255:
+			return this.readApplicationExtension();
+		default:
+			var buffer2 = new haxe_io_BytesOutput();
+			var bytes2 = new haxe_io_Bytes(new ArrayBuffer(255));
+			var len2 = this.i.readByte();
+			while(len2 != 0) {
+				this.i.readBytes(bytes2,0,len2);
+				buffer2.writeBytes(bytes2,0,len2);
+				len2 = this.i.readByte();
+			}
+			bytes2 = buffer2.getBytes();
+			return format_gif_Block.BExtension(format_gif_Extension.EUnknown(subId,bytes2));
+		}
+	}
+	,readApplicationExtension: function() {
+		if(this.i.readByte() != 11) {
+			throw new js__$Boot_HaxeError("Incorrect size of Application Extension introducer block.");
+		}
+		var name = this.i.readString(8);
+		var version = this.i.readString(3);
+		var buffer = new haxe_io_BytesOutput();
+		var bytes = new haxe_io_Bytes(new ArrayBuffer(255));
+		var len = this.i.readByte();
+		while(len != 0) {
+			this.i.readBytes(bytes,0,len);
+			buffer.writeBytes(bytes,0,len);
+			len = this.i.readByte();
+		}
+		bytes = buffer.getBytes();
+		var data = bytes;
+		if(name == "NETSCAPE" && version == "2.0" && data.b[0] == 1) {
+			return format_gif_Block.BExtension(format_gif_Extension.EApplicationExtension(format_gif_ApplicationExtension.AENetscapeLooping(data.b[1] | data.b[2] << 8)));
+		}
+		return format_gif_Block.BExtension(format_gif_Extension.EApplicationExtension(format_gif_ApplicationExtension.AEUnknown(name,version,data)));
+	}
+	,readColorTable: function(size) {
+		size *= 3;
+		var output = new haxe_io_Bytes(new ArrayBuffer(size));
+		var c = 0;
+		while(c < size) {
+			var v = this.i.readByte();
+			output.b[c] = v & 255;
+			var v1 = this.i.readByte();
+			output.b[c + 1] = v1 & 255;
+			var v2 = this.i.readByte();
+			output.b[c + 2] = v2 & 255;
+			c += 3;
+		}
+		return output;
+	}
+	,__class__: format_gif_Reader
+};
+var format_gif_Tools = function() { };
+$hxClasses["format.gif.Tools"] = format_gif_Tools;
+format_gif_Tools.__name__ = ["format","gif","Tools"];
+format_gif_Tools.extractFullBGRA = function(data,frameIndex) {
+	var gce = null;
+	var frameCaret = 0;
+	var bytes = new haxe_io_Bytes(new ArrayBuffer(data.logicalScreenDescriptor.width * data.logicalScreenDescriptor.height * 4));
+	var _g_head = data.blocks.h;
+	while(_g_head != null) {
+		var val = _g_head.item;
+		_g_head = _g_head.next;
+		switch(val[1]) {
+		case 0:
+			var frame = val[2];
+			var ct = frame.localColorTable ? frame.colorTable : data.globalColorTable;
+			if(ct == null) {
+				throw new js__$Boot_HaxeError("Frame does not have a color table!");
+			}
+			var transparentIndex = gce != null && gce.hasTransparentColor ? gce.transparentIndex * 3 : -1;
+			var pixels = frame.pixels;
+			var x = 0;
+			var writeCaret = (frame.y * data.logicalScreenDescriptor.width + frame.x) * 4;
+			var lineSkip = (data.logicalScreenDescriptor.width - frame.width) * 4 + 4;
+			switch((frameCaret != frameIndex && gce != null ? gce.disposalMethod : format_gif_DisposalMethod.NO_ACTION)[1]) {
+			case 2:
+				var _g1 = 0;
+				var _g = pixels.length;
+				while(_g1 < _g) {
+					++_g1;
+					bytes.b[writeCaret] = 0;
+					bytes.b[writeCaret + 1] = 0;
+					bytes.b[writeCaret + 2] = 0;
+					bytes.b[writeCaret + 3] = 0;
+					if(++x == frame.width) {
+						x = 0;
+						writeCaret += lineSkip;
+					} else {
+						writeCaret += 4;
+					}
+				}
+				break;
+			case 3:
+				break;
+			default:
+				var _g11 = 0;
+				var _g2 = pixels.length;
+				while(_g11 < _g2) {
+					var index = pixels.b[_g11++] * 3;
+					if(transparentIndex != index) {
+						bytes.b[writeCaret] = ct.b[index + 2] & 255;
+						bytes.b[writeCaret + 1] = ct.b[index + 1] & 255;
+						bytes.b[writeCaret + 2] = ct.b[index] & 255;
+						bytes.b[writeCaret + 3] = 255;
+					}
+					if(++x == frame.width) {
+						x = 0;
+						writeCaret += lineSkip;
+					} else {
+						writeCaret += 4;
+					}
+				}
+			}
+			if(frameCaret == frameIndex) {
+				return bytes;
+			}
+			++frameCaret;
+			gce = null;
+			break;
+		case 1:
+			var ext = val[2];
+			if(ext[1] == 0) {
+				gce = ext[2];
+			}
+			break;
+		default:
+		}
+	}
+	return bytes;
+};
+var format_png_Color = $hxClasses["format.png.Color"] = { __ename__ : true, __constructs__ : ["ColGrey","ColTrue","ColIndexed"] };
+format_png_Color.ColGrey = function(alpha) { var $x = ["ColGrey",0,alpha]; $x.__enum__ = format_png_Color; $x.toString = $estr; return $x; };
+format_png_Color.ColTrue = function(alpha) { var $x = ["ColTrue",1,alpha]; $x.__enum__ = format_png_Color; $x.toString = $estr; return $x; };
+format_png_Color.ColIndexed = ["ColIndexed",2];
+format_png_Color.ColIndexed.toString = $estr;
+format_png_Color.ColIndexed.__enum__ = format_png_Color;
+format_png_Color.__empty_constructs__ = [format_png_Color.ColIndexed];
+var format_png_Chunk = $hxClasses["format.png.Chunk"] = { __ename__ : true, __constructs__ : ["CEnd","CHeader","CData","CPalette","CUnknown"] };
+format_png_Chunk.CEnd = ["CEnd",0];
+format_png_Chunk.CEnd.toString = $estr;
+format_png_Chunk.CEnd.__enum__ = format_png_Chunk;
+format_png_Chunk.CHeader = function(h) { var $x = ["CHeader",1,h]; $x.__enum__ = format_png_Chunk; $x.toString = $estr; return $x; };
+format_png_Chunk.CData = function(b) { var $x = ["CData",2,b]; $x.__enum__ = format_png_Chunk; $x.toString = $estr; return $x; };
+format_png_Chunk.CPalette = function(b) { var $x = ["CPalette",3,b]; $x.__enum__ = format_png_Chunk; $x.toString = $estr; return $x; };
+format_png_Chunk.CUnknown = function(id,data) { var $x = ["CUnknown",4,id,data]; $x.__enum__ = format_png_Chunk; $x.toString = $estr; return $x; };
+format_png_Chunk.__empty_constructs__ = [format_png_Chunk.CEnd];
+var format_png_Reader = function(i) {
+	this.i = i;
+	i.set_bigEndian(true);
+	this.checkCRC = true;
+};
+$hxClasses["format.png.Reader"] = format_png_Reader;
+format_png_Reader.__name__ = ["format","png","Reader"];
+format_png_Reader.prototype = {
+	read: function() {
+		var _g = 0;
+		var _g1 = [137,80,78,71,13,10,26,10];
+		while(_g < _g1.length) {
+			var b = _g1[_g];
+			++_g;
+			if(this.i.readByte() != b) {
+				throw new js__$Boot_HaxeError("Invalid header");
+			}
+		}
+		var l = new List();
+		while(true) {
+			var c = this.readChunk();
+			l.add(c);
+			if(c == format_png_Chunk.CEnd) {
+				break;
+			}
+		}
+		return l;
+	}
+	,readHeader: function(i) {
+		i.set_bigEndian(true);
+		var width = i.readInt32();
+		var height = i.readInt32();
+		var colbits = i.readByte();
+		var color = i.readByte();
+		var color1;
+		switch(color) {
+		case 0:
+			color1 = format_png_Color.ColGrey(false);
+			break;
+		case 2:
+			color1 = format_png_Color.ColTrue(false);
+			break;
+		case 3:
+			color1 = format_png_Color.ColIndexed;
+			break;
+		case 4:
+			color1 = format_png_Color.ColGrey(true);
+			break;
+		case 6:
+			color1 = format_png_Color.ColTrue(true);
+			break;
+		default:
+			throw new js__$Boot_HaxeError("Unknown color model " + color + ":" + colbits);
+		}
+		var compress = i.readByte();
+		var filter = i.readByte();
+		if(compress != 0 || filter != 0) {
+			throw new js__$Boot_HaxeError("Invalid header");
+		}
+		var interlace = i.readByte();
+		if(interlace != 0 && interlace != 1) {
+			throw new js__$Boot_HaxeError("Invalid header");
+		}
+		return { width : width, height : height, colbits : colbits, color : color1, interlaced : interlace == 1};
+	}
+	,readChunk: function() {
+		var dataLen = this.i.readInt32();
+		var id = this.i.readString(4);
+		var data = this.i.read(dataLen);
+		var crc = this.i.readInt32();
+		if(this.checkCRC) {
+			var c = new haxe_crypto_Crc32();
+			var _g = 0;
+			while(_g < 4) c["byte"](HxOverrides.cca(id,_g++));
+			c.update(data,0,data.length);
+			if(c.get() != crc) {
+				throw new js__$Boot_HaxeError("CRC check failure");
+			}
+		}
+		switch(id) {
+		case "IDAT":
+			return format_png_Chunk.CData(data);
+		case "IEND":
+			return format_png_Chunk.CEnd;
+		case "IHDR":
+			return format_png_Chunk.CHeader(this.readHeader(new haxe_io_BytesInput(data)));
+		case "PLTE":
+			return format_png_Chunk.CPalette(data);
+		default:
+			return format_png_Chunk.CUnknown(id,data);
+		}
+	}
+	,__class__: format_png_Reader
+};
+var format_png_Tools = function() { };
+$hxClasses["format.png.Tools"] = format_png_Tools;
+format_png_Tools.__name__ = ["format","png","Tools"];
+format_png_Tools.getHeader = function(d) {
+	var _g_head = d.h;
+	while(_g_head != null) {
+		var val = _g_head.item;
+		_g_head = _g_head.next;
+		if(val[1] == 1) {
+			return val[2];
+		}
+	}
+	throw new js__$Boot_HaxeError("Header not found");
+};
+format_png_Tools.getPalette = function(d) {
+	var _g_head = d.h;
+	while(_g_head != null) {
+		var val = _g_head.item;
+		_g_head = _g_head.next;
+		if(val[1] == 3) {
+			return val[2];
+		}
+	}
+	return null;
+};
+format_png_Tools.extract32 = function(d,bytes,flipY) {
+	var h = format_png_Tools.getHeader(d);
+	var bgra = bytes == null ? new haxe_io_Bytes(new ArrayBuffer(h.width * h.height * 4)) : bytes;
+	var data = null;
+	var fullData = null;
+	var _g_head = d.h;
+	while(_g_head != null) {
+		var val = _g_head.item;
+		_g_head = _g_head.next;
+		if(val[1] == 2) {
+			var b = val[2];
+			if(fullData != null) {
+				var b2 = b.b;
+				var _g1 = 0;
+				var _g = b.length;
+				while(_g1 < _g) fullData.b.push(b2[_g1++]);
+			} else if(data == null) {
+				data = b;
+			} else {
+				fullData = new haxe_io_BytesBuffer();
+				var b21 = data.b;
+				var _g11 = 0;
+				var _g2 = data.length;
+				while(_g11 < _g2) fullData.b.push(b21[_g11++]);
+				var b22 = b.b;
+				var _g12 = 0;
+				var _g3 = b.length;
+				while(_g12 < _g3) fullData.b.push(b22[_g12++]);
+				data = null;
+			}
+		}
+	}
+	if(fullData != null) {
+		data = fullData.getBytes();
+	}
+	if(data == null) {
+		throw new js__$Boot_HaxeError("Data not found");
+	}
+	data = format_tools_Inflate.run(data);
+	var r = 0;
+	var w = 0;
+	var lineDelta = 0;
+	if(flipY) {
+		lineDelta = -h.width * 8;
+		w = (h.height - 1) * (h.width * 4);
+	}
+	var flipY1 = flipY ? -1 : 1;
+	var _g4 = h.color;
+	switch(_g4[1]) {
+	case 0:
+		var alpha = _g4[2];
+		if(h.colbits != 8) {
+			throw new js__$Boot_HaxeError("Unsupported color mode");
+		}
+		var width = h.width;
+		if(data.length < h.height * ((alpha ? 2 : 1) * width + 1)) {
+			throw new js__$Boot_HaxeError("Not enough data");
+		}
+		var alphvaIdx = -1;
+		if(!alpha) {
+			var _g_head1 = d.h;
+			while(_g_head1 != null) {
+				var val1 = _g_head1.item;
+				_g_head1 = _g_head1.next;
+				if(val1[1] == 4) {
+					if(val1[2] == "tRNS") {
+						var data1 = val1[3];
+						if(data1.length >= 2) {
+							alphvaIdx = data1.b[1];
+						}
+						break;
+					}
+				}
+			}
+		}
+		var _g13 = 0;
+		var _g5 = h.height;
+		while(_g13 < _g5) {
+			var y = _g13++;
+			var f = data.b[r++];
+			switch(f) {
+			case 0:
+				if(alpha) {
+					var _g31 = 0;
+					while(_g31 < width) {
+						++_g31;
+						var v = data.b[r++];
+						bgra.b[w++] = v & 255;
+						bgra.b[w++] = v & 255;
+						bgra.b[w++] = v & 255;
+						bgra.b[w++] = data.b[r++] & 255;
+					}
+				} else {
+					var _g32 = 0;
+					while(_g32 < width) {
+						++_g32;
+						var v1 = data.b[r++];
+						bgra.b[w++] = v1 & 255;
+						bgra.b[w++] = v1 & 255;
+						bgra.b[w++] = v1 & 255;
+						bgra.b[w++] = (v1 == alphvaIdx ? 0 : 255) & 255;
+					}
+				}
+				break;
+			case 1:
+				var cv = 0;
+				var ca = 0;
+				if(alpha) {
+					var _g33 = 0;
+					while(_g33 < width) {
+						++_g33;
+						cv += data.b[r++];
+						bgra.b[w++] = cv & 255;
+						bgra.b[w++] = cv & 255;
+						bgra.b[w++] = cv & 255;
+						ca += data.b[r++];
+						bgra.b[w++] = ca & 255;
+					}
+				} else {
+					var _g34 = 0;
+					while(_g34 < width) {
+						++_g34;
+						cv += data.b[r++];
+						bgra.b[w++] = cv & 255;
+						bgra.b[w++] = cv & 255;
+						bgra.b[w++] = cv & 255;
+						bgra.b[w++] = (cv == alphvaIdx ? 0 : 255) & 255;
+					}
+				}
+				break;
+			case 2:
+				var stride = y == 0 ? 0 : width * 4 * flipY1;
+				if(alpha) {
+					var _g35 = 0;
+					while(_g35 < width) {
+						++_g35;
+						var v2 = data.b[r++] + bgra.b[w - stride];
+						bgra.b[w++] = v2 & 255;
+						bgra.b[w++] = v2 & 255;
+						bgra.b[w++] = v2 & 255;
+						bgra.b[w++] = data.b[r++] + bgra.b[w - stride] & 255;
+					}
+				} else {
+					var _g36 = 0;
+					while(_g36 < width) {
+						++_g36;
+						var v3 = data.b[r++] + bgra.b[w - stride];
+						bgra.b[w++] = v3 & 255;
+						bgra.b[w++] = v3 & 255;
+						bgra.b[w++] = v3 & 255;
+						bgra.b[w++] = (v3 == alphvaIdx ? 0 : 255) & 255;
+					}
+				}
+				break;
+			case 3:
+				var cv1 = 0;
+				var ca1 = 0;
+				var stride1 = y == 0 ? 0 : width * 4 * flipY1;
+				if(alpha) {
+					var _g37 = 0;
+					while(_g37 < width) {
+						++_g37;
+						cv1 = data.b[r++] + (cv1 + bgra.b[w - stride1] >> 1) & 255;
+						bgra.b[w++] = cv1 & 255;
+						bgra.b[w++] = cv1 & 255;
+						bgra.b[w++] = cv1 & 255;
+						ca1 = data.b[r++] + (ca1 + bgra.b[w - stride1] >> 1) & 255;
+						bgra.b[w++] = ca1 & 255;
+					}
+				} else {
+					var _g38 = 0;
+					while(_g38 < width) {
+						++_g38;
+						cv1 = data.b[r++] + (cv1 + bgra.b[w - stride1] >> 1) & 255;
+						bgra.b[w++] = cv1 & 255;
+						bgra.b[w++] = cv1 & 255;
+						bgra.b[w++] = cv1 & 255;
+						bgra.b[w++] = (cv1 == alphvaIdx ? 0 : 255) & 255;
+					}
+				}
+				break;
+			case 4:
+				var stride2 = width * 4 * flipY1;
+				var cv2 = 0;
+				var ca2 = 0;
+				if(alpha) {
+					var _g39 = 0;
+					while(_g39 < width) {
+						var x = _g39++;
+						var b1 = y == 0 ? 0 : bgra.b[w - stride2];
+						var c = x == 0 || y == 0 ? 0 : bgra.b[w - stride2 - 4];
+						var k = cv2 + b1 - c;
+						var pa = k - cv2;
+						if(pa < 0) {
+							pa = -pa;
+						}
+						var pb = k - b1;
+						if(pb < 0) {
+							pb = -pb;
+						}
+						var pc = k - c;
+						if(pc < 0) {
+							pc = -pc;
+						}
+						cv2 = (pa <= pb && pa <= pc ? cv2 : pb <= pc ? b1 : c) + data.b[r++] & 255;
+						bgra.b[w++] = cv2 & 255;
+						bgra.b[w++] = cv2 & 255;
+						bgra.b[w++] = cv2 & 255;
+						var b3 = y == 0 ? 0 : bgra.b[w - stride2];
+						var c1 = x == 0 || y == 0 ? 0 : bgra.b[w - stride2 - 4];
+						var k1 = ca2 + b3 - c1;
+						var pa1 = k1 - ca2;
+						if(pa1 < 0) {
+							pa1 = -pa1;
+						}
+						var pb1 = k1 - b3;
+						if(pb1 < 0) {
+							pb1 = -pb1;
+						}
+						var pc1 = k1 - c1;
+						if(pc1 < 0) {
+							pc1 = -pc1;
+						}
+						ca2 = (pa1 <= pb1 && pa1 <= pc1 ? ca2 : pb1 <= pc1 ? b3 : c1) + data.b[r++] & 255;
+						bgra.b[w++] = ca2 & 255;
+					}
+				} else {
+					var _g310 = 0;
+					while(_g310 < width) {
+						var x1 = _g310++;
+						var b4 = y == 0 ? 0 : bgra.b[w - stride2];
+						var c2 = x1 == 0 || y == 0 ? 0 : bgra.b[w - stride2 - 4];
+						var k2 = cv2 + b4 - c2;
+						var pa2 = k2 - cv2;
+						if(pa2 < 0) {
+							pa2 = -pa2;
+						}
+						var pb2 = k2 - b4;
+						if(pb2 < 0) {
+							pb2 = -pb2;
+						}
+						var pc2 = k2 - c2;
+						if(pc2 < 0) {
+							pc2 = -pc2;
+						}
+						cv2 = (pa2 <= pb2 && pa2 <= pc2 ? cv2 : pb2 <= pc2 ? b4 : c2) + data.b[r++] & 255;
+						bgra.b[w++] = cv2 & 255;
+						bgra.b[w++] = cv2 & 255;
+						bgra.b[w++] = cv2 & 255;
+						bgra.b[w++] = (cv2 == alphvaIdx ? 0 : 255) & 255;
+					}
+				}
+				break;
+			default:
+				throw new js__$Boot_HaxeError("Invalid filter " + f);
+			}
+			w += lineDelta;
+		}
+		break;
+	case 1:
+		var alpha1 = _g4[2];
+		if(h.colbits != 8) {
+			throw new js__$Boot_HaxeError("Unsupported color mode");
+		}
+		var width1 = h.width;
+		if(data.length < h.height * ((alpha1 ? 4 : 3) * width1 + 1)) {
+			throw new js__$Boot_HaxeError("Not enough data");
+		}
+		var alphaRed = -1;
+		var alphaGreen = -1;
+		var alphaBlue = -1;
+		if(!alpha1) {
+			var _g_head2 = d.h;
+			while(_g_head2 != null) {
+				var val2 = _g_head2.item;
+				_g_head2 = _g_head2.next;
+				if(val2[1] == 4) {
+					if(val2[2] == "tRNS") {
+						var data2 = val2[3];
+						if(data2.length >= 6) {
+							alphaRed = data2.b[1];
+							alphaGreen = data2.b[3];
+							alphaBlue = data2.b[5];
+						}
+						break;
+					}
+				}
+			}
+		}
+		var cr = 0;
+		var cg = 0;
+		var cb = 0;
+		var ca3 = 0;
+		var _g14 = 0;
+		var _g6 = h.height;
+		while(_g14 < _g6) {
+			var y1 = _g14++;
+			var f1 = data.b[r++];
+			switch(f1) {
+			case 0:
+				if(alpha1) {
+					var _g311 = 0;
+					while(_g311 < width1) {
+						++_g311;
+						bgra.b[w++] = data.b[r + 2] & 255;
+						bgra.b[w++] = data.b[r + 1] & 255;
+						bgra.b[w++] = data.b[r] & 255;
+						bgra.b[w++] = data.b[r + 3] & 255;
+						r += 4;
+					}
+				} else {
+					var _g312 = 0;
+					while(_g312 < width1) {
+						++_g312;
+						cb = data.b[r + 2];
+						bgra.b[w++] = cb & 255;
+						cg = data.b[r + 1];
+						bgra.b[w++] = cg & 255;
+						cr = data.b[r];
+						bgra.b[w++] = cr & 255;
+						bgra.b[w++] = (cr == alphaRed && cg == alphaGreen && cb == alphaBlue ? 0 : 255) & 255;
+						r += 3;
+					}
+				}
+				break;
+			case 1:
+				ca3 = 0;
+				cb = 0;
+				cg = 0;
+				cr = 0;
+				if(alpha1) {
+					var _g313 = 0;
+					while(_g313 < width1) {
+						++_g313;
+						cb += data.b[r + 2];
+						bgra.b[w++] = cb & 255;
+						cg += data.b[r + 1];
+						bgra.b[w++] = cg & 255;
+						cr += data.b[r];
+						bgra.b[w++] = cr & 255;
+						ca3 += data.b[r + 3];
+						bgra.b[w++] = ca3 & 255;
+						r += 4;
+					}
+				} else {
+					var _g314 = 0;
+					while(_g314 < width1) {
+						++_g314;
+						cb += data.b[r + 2];
+						bgra.b[w++] = cb & 255;
+						cg += data.b[r + 1];
+						bgra.b[w++] = cg & 255;
+						cr += data.b[r];
+						bgra.b[w++] = cr & 255;
+						bgra.b[w++] = (cr == alphaRed && cg == alphaGreen && cb == alphaBlue ? 0 : 255) & 255;
+						r += 3;
+					}
+				}
+				break;
+			case 2:
+				var stride3 = y1 == 0 ? 0 : width1 * 4 * flipY1;
+				if(alpha1) {
+					var _g315 = 0;
+					while(_g315 < width1) {
+						++_g315;
+						bgra.b[w] = data.b[r + 2] + bgra.b[w - stride3] & 255;
+						++w;
+						bgra.b[w] = data.b[r + 1] + bgra.b[w - stride3] & 255;
+						++w;
+						bgra.b[w] = data.b[r] + bgra.b[w - stride3] & 255;
+						++w;
+						bgra.b[w] = data.b[r + 3] + bgra.b[w - stride3] & 255;
+						++w;
+						r += 4;
+					}
+				} else {
+					var _g316 = 0;
+					while(_g316 < width1) {
+						++_g316;
+						cb = data.b[r + 2] + bgra.b[w - stride3];
+						bgra.b[w] = cb & 255;
+						++w;
+						cg = data.b[r + 1] + bgra.b[w - stride3];
+						bgra.b[w] = cg & 255;
+						++w;
+						cr = data.b[r] + bgra.b[w - stride3];
+						bgra.b[w] = cr & 255;
+						++w;
+						bgra.b[w++] = (cr == alphaRed && cg == alphaGreen && cb == alphaBlue ? 0 : 255) & 255;
+						r += 3;
+					}
+				}
+				break;
+			case 3:
+				ca3 = 0;
+				cb = 0;
+				cg = 0;
+				cr = 0;
+				var stride4 = y1 == 0 ? 0 : width1 * 4 * flipY1;
+				if(alpha1) {
+					var _g317 = 0;
+					while(_g317 < width1) {
+						++_g317;
+						cb = data.b[r + 2] + (cb + bgra.b[w - stride4] >> 1) & 255;
+						bgra.b[w++] = cb & 255;
+						cg = data.b[r + 1] + (cg + bgra.b[w - stride4] >> 1) & 255;
+						bgra.b[w++] = cg & 255;
+						cr = data.b[r] + (cr + bgra.b[w - stride4] >> 1) & 255;
+						bgra.b[w++] = cr & 255;
+						ca3 = data.b[r + 3] + (ca3 + bgra.b[w - stride4] >> 1) & 255;
+						bgra.b[w++] = ca3 & 255;
+						r += 4;
+					}
+				} else {
+					var _g318 = 0;
+					while(_g318 < width1) {
+						++_g318;
+						cb = data.b[r + 2] + (cb + bgra.b[w - stride4] >> 1) & 255;
+						bgra.b[w++] = cb & 255;
+						cg = data.b[r + 1] + (cg + bgra.b[w - stride4] >> 1) & 255;
+						bgra.b[w++] = cg & 255;
+						cr = data.b[r] + (cr + bgra.b[w - stride4] >> 1) & 255;
+						bgra.b[w++] = cr & 255;
+						bgra.b[w++] = (cr == alphaRed && cg == alphaGreen && cb == alphaBlue ? 0 : 255) & 255;
+						r += 3;
+					}
+				}
+				break;
+			case 4:
+				var stride5 = width1 * 4 * flipY1;
+				ca3 = 0;
+				cb = 0;
+				cg = 0;
+				cr = 0;
+				if(alpha1) {
+					var _g319 = 0;
+					while(_g319 < width1) {
+						var x2 = _g319++;
+						var b5 = y1 == 0 ? 0 : bgra.b[w - stride5];
+						var c3 = x2 == 0 || y1 == 0 ? 0 : bgra.b[w - stride5 - 4];
+						var k3 = cb + b5 - c3;
+						var pa3 = k3 - cb;
+						if(pa3 < 0) {
+							pa3 = -pa3;
+						}
+						var pb3 = k3 - b5;
+						if(pb3 < 0) {
+							pb3 = -pb3;
+						}
+						var pc3 = k3 - c3;
+						if(pc3 < 0) {
+							pc3 = -pc3;
+						}
+						cb = (pa3 <= pb3 && pa3 <= pc3 ? cb : pb3 <= pc3 ? b5 : c3) + data.b[r + 2] & 255;
+						bgra.b[w++] = cb & 255;
+						var b6 = y1 == 0 ? 0 : bgra.b[w - stride5];
+						var c4 = x2 == 0 || y1 == 0 ? 0 : bgra.b[w - stride5 - 4];
+						var k4 = cg + b6 - c4;
+						var pa4 = k4 - cg;
+						if(pa4 < 0) {
+							pa4 = -pa4;
+						}
+						var pb4 = k4 - b6;
+						if(pb4 < 0) {
+							pb4 = -pb4;
+						}
+						var pc4 = k4 - c4;
+						if(pc4 < 0) {
+							pc4 = -pc4;
+						}
+						cg = (pa4 <= pb4 && pa4 <= pc4 ? cg : pb4 <= pc4 ? b6 : c4) + data.b[r + 1] & 255;
+						bgra.b[w++] = cg & 255;
+						var b7 = y1 == 0 ? 0 : bgra.b[w - stride5];
+						var c5 = x2 == 0 || y1 == 0 ? 0 : bgra.b[w - stride5 - 4];
+						var k5 = cr + b7 - c5;
+						var pa5 = k5 - cr;
+						if(pa5 < 0) {
+							pa5 = -pa5;
+						}
+						var pb5 = k5 - b7;
+						if(pb5 < 0) {
+							pb5 = -pb5;
+						}
+						var pc5 = k5 - c5;
+						if(pc5 < 0) {
+							pc5 = -pc5;
+						}
+						cr = (pa5 <= pb5 && pa5 <= pc5 ? cr : pb5 <= pc5 ? b7 : c5) + data.b[r] & 255;
+						bgra.b[w++] = cr & 255;
+						var b8 = y1 == 0 ? 0 : bgra.b[w - stride5];
+						var c6 = x2 == 0 || y1 == 0 ? 0 : bgra.b[w - stride5 - 4];
+						var k6 = ca3 + b8 - c6;
+						var pa6 = k6 - ca3;
+						if(pa6 < 0) {
+							pa6 = -pa6;
+						}
+						var pb6 = k6 - b8;
+						if(pb6 < 0) {
+							pb6 = -pb6;
+						}
+						var pc6 = k6 - c6;
+						if(pc6 < 0) {
+							pc6 = -pc6;
+						}
+						ca3 = (pa6 <= pb6 && pa6 <= pc6 ? ca3 : pb6 <= pc6 ? b8 : c6) + data.b[r + 3] & 255;
+						bgra.b[w++] = ca3 & 255;
+						r += 4;
+					}
+				} else {
+					var _g320 = 0;
+					while(_g320 < width1) {
+						var x3 = _g320++;
+						var b9 = y1 == 0 ? 0 : bgra.b[w - stride5];
+						var c7 = x3 == 0 || y1 == 0 ? 0 : bgra.b[w - stride5 - 4];
+						var k7 = cb + b9 - c7;
+						var pa7 = k7 - cb;
+						if(pa7 < 0) {
+							pa7 = -pa7;
+						}
+						var pb7 = k7 - b9;
+						if(pb7 < 0) {
+							pb7 = -pb7;
+						}
+						var pc7 = k7 - c7;
+						if(pc7 < 0) {
+							pc7 = -pc7;
+						}
+						cb = (pa7 <= pb7 && pa7 <= pc7 ? cb : pb7 <= pc7 ? b9 : c7) + data.b[r + 2] & 255;
+						bgra.b[w++] = cb & 255;
+						var b10 = y1 == 0 ? 0 : bgra.b[w - stride5];
+						var c8 = x3 == 0 || y1 == 0 ? 0 : bgra.b[w - stride5 - 4];
+						var k8 = cg + b10 - c8;
+						var pa8 = k8 - cg;
+						if(pa8 < 0) {
+							pa8 = -pa8;
+						}
+						var pb8 = k8 - b10;
+						if(pb8 < 0) {
+							pb8 = -pb8;
+						}
+						var pc8 = k8 - c8;
+						if(pc8 < 0) {
+							pc8 = -pc8;
+						}
+						cg = (pa8 <= pb8 && pa8 <= pc8 ? cg : pb8 <= pc8 ? b10 : c8) + data.b[r + 1] & 255;
+						bgra.b[w++] = cg & 255;
+						var b11 = y1 == 0 ? 0 : bgra.b[w - stride5];
+						var c9 = x3 == 0 || y1 == 0 ? 0 : bgra.b[w - stride5 - 4];
+						var k9 = cr + b11 - c9;
+						var pa9 = k9 - cr;
+						if(pa9 < 0) {
+							pa9 = -pa9;
+						}
+						var pb9 = k9 - b11;
+						if(pb9 < 0) {
+							pb9 = -pb9;
+						}
+						var pc9 = k9 - c9;
+						if(pc9 < 0) {
+							pc9 = -pc9;
+						}
+						cr = (pa9 <= pb9 && pa9 <= pc9 ? cr : pb9 <= pc9 ? b11 : c9) + data.b[r] & 255;
+						bgra.b[w++] = cr & 255;
+						bgra.b[w++] = (cr == alphaRed && cg == alphaGreen && cb == alphaBlue ? 0 : 255) & 255;
+						r += 3;
+					}
+				}
+				break;
+			default:
+				throw new js__$Boot_HaxeError("Invalid filter " + f1);
+			}
+			w += lineDelta;
+		}
+		break;
+	case 2:
+		var pal = format_png_Tools.getPalette(d);
+		if(pal == null) {
+			throw new js__$Boot_HaxeError("PNG Palette is missing");
+		}
+		var alpha2 = null;
+		var _g_head3 = d.h;
+		while(_g_head3 != null) {
+			var val3 = _g_head3.item;
+			_g_head3 = _g_head3.next;
+			if(val3[1] == 4) {
+				if(val3[2] == "tRNS") {
+					alpha2 = val3[3];
+					break;
+				}
+			}
+		}
+		if(alpha2 != null && alpha2.length < 1 << h.colbits) {
+			var alpha21 = new haxe_io_Bytes(new ArrayBuffer(1 << h.colbits));
+			alpha21.blit(0,alpha2,0,alpha2.length);
+			alpha21.fill(alpha2.length,alpha21.length - alpha2.length,255);
+			alpha2 = alpha21;
+		}
+		var width2 = h.width;
+		if(data.length < h.height * (Math.ceil(width2 * h.colbits / 8) + 1)) {
+			throw new js__$Boot_HaxeError("Not enough data");
+		}
+		var rline = h.width * h.colbits >> 3;
+		var _g15 = 0;
+		var _g7 = h.height;
+		while(_g15 < _g7) {
+			var y2 = _g15++;
+			var f2 = data.b[r++];
+			if(f2 == 0) {
+				r += rline;
+				continue;
+			}
+			switch(f2) {
+			case 1:
+				var c10 = 0;
+				var _g321 = 0;
+				while(_g321 < width2) {
+					++_g321;
+					c10 += data.b[r];
+					data.b[r++] = c10 & 255 & 255;
+				}
+				break;
+			case 2:
+				var stride6 = y2 == 0 ? 0 : rline + 1;
+				var _g322 = 0;
+				while(_g322 < width2) {
+					++_g322;
+					data.b[r] = data.b[r] + data.b[r - stride6] & 255;
+					++r;
+				}
+				break;
+			case 3:
+				var c11 = 0;
+				var stride7 = y2 == 0 ? 0 : rline + 1;
+				var _g323 = 0;
+				while(_g323 < width2) {
+					++_g323;
+					c11 = data.b[r] + (c11 + data.b[r - stride7] >> 1) & 255;
+					data.b[r++] = c11 & 255;
+				}
+				break;
+			case 4:
+				var stride8 = rline + 1;
+				var c12 = 0;
+				var _g324 = 0;
+				while(_g324 < width2) {
+					var x4 = _g324++;
+					var b12 = y2 == 0 ? 0 : data.b[r - stride8];
+					var c13 = x4 == 0 || y2 == 0 ? 0 : data.b[r - stride8 - 1];
+					var k10 = c12 + b12 - c13;
+					var pa10 = k10 - c12;
+					if(pa10 < 0) {
+						pa10 = -pa10;
+					}
+					var pb10 = k10 - b12;
+					if(pb10 < 0) {
+						pb10 = -pb10;
+					}
+					var pc10 = k10 - c13;
+					if(pc10 < 0) {
+						pc10 = -pc10;
+					}
+					c12 = (pa10 <= pb10 && pa10 <= pc10 ? c12 : pb10 <= pc10 ? b12 : c13) + data.b[r] & 255;
+					data.b[r++] = c12 & 255;
+				}
+				break;
+			default:
+				throw new js__$Boot_HaxeError("Invalid filter " + f2);
+			}
+		}
+		var r1 = 0;
+		if(h.colbits == 8) {
+			var _g16 = 0;
+			var _g8 = h.height;
+			while(_g16 < _g8) {
+				++_g16;
+				++r1;
+				var _g325 = 0;
+				var _g21 = h.width;
+				while(_g325 < _g21) {
+					++_g325;
+					var c14 = data.b[r1++];
+					bgra.b[w++] = pal.b[c14 * 3 + 2] & 255;
+					bgra.b[w++] = pal.b[c14 * 3 + 1] & 255;
+					bgra.b[w++] = pal.b[c14 * 3] & 255;
+					bgra.b[w++] = (alpha2 != null ? alpha2.b[c14] : 255) & 255;
+				}
+				w += lineDelta;
+			}
+		} else if(h.colbits < 8) {
+			var req = h.colbits;
+			var mask = (1 << req) - 1;
+			var _g17 = 0;
+			var _g9 = h.height;
+			while(_g17 < _g9) {
+				++_g17;
+				++r1;
+				var bits = 0;
+				var nbits = 0;
+				var _g326 = 0;
+				var _g22 = h.width;
+				while(_g326 < _g22) {
+					++_g326;
+					if(nbits < req) {
+						bits = bits << 8 | data.b[r1++];
+						nbits += 8;
+					}
+					var c15 = bits >>> nbits - req & mask;
+					nbits -= req;
+					bgra.b[w++] = pal.b[c15 * 3 + 2] & 255;
+					bgra.b[w++] = pal.b[c15 * 3 + 1] & 255;
+					bgra.b[w++] = pal.b[c15 * 3] & 255;
+					bgra.b[w++] = (alpha2 != null ? alpha2.b[c15] : 255) & 255;
+				}
+				w += lineDelta;
+			}
+		} else {
+			throw new js__$Boot_HaxeError(h.colbits + " indexed bits per pixel not supported");
+		}
+		break;
+	}
+	return bgra;
+};
+var format_tga_ImageOrigin = $hxClasses["format.tga.ImageOrigin"] = { __ename__ : true, __constructs__ : ["BottomLeft","BottomRight","TopLeft","TopRight"] };
+format_tga_ImageOrigin.BottomLeft = ["BottomLeft",0];
+format_tga_ImageOrigin.BottomLeft.toString = $estr;
+format_tga_ImageOrigin.BottomLeft.__enum__ = format_tga_ImageOrigin;
+format_tga_ImageOrigin.BottomRight = ["BottomRight",1];
+format_tga_ImageOrigin.BottomRight.toString = $estr;
+format_tga_ImageOrigin.BottomRight.__enum__ = format_tga_ImageOrigin;
+format_tga_ImageOrigin.TopLeft = ["TopLeft",2];
+format_tga_ImageOrigin.TopLeft.toString = $estr;
+format_tga_ImageOrigin.TopLeft.__enum__ = format_tga_ImageOrigin;
+format_tga_ImageOrigin.TopRight = ["TopRight",3];
+format_tga_ImageOrigin.TopRight.toString = $estr;
+format_tga_ImageOrigin.TopRight.__enum__ = format_tga_ImageOrigin;
+format_tga_ImageOrigin.__empty_constructs__ = [format_tga_ImageOrigin.BottomLeft,format_tga_ImageOrigin.BottomRight,format_tga_ImageOrigin.TopLeft,format_tga_ImageOrigin.TopRight];
+var format_tga_ImageType = $hxClasses["format.tga.ImageType"] = { __ename__ : true, __constructs__ : ["NoImage","UncompressedColorMapped","UncompressedTrueColor","UncompressedBlackAndWhite","RunLengthColorMapped","RunLengthTrueColor","RunLengthBlackAndWhite","Unknown"] };
+format_tga_ImageType.NoImage = ["NoImage",0];
+format_tga_ImageType.NoImage.toString = $estr;
+format_tga_ImageType.NoImage.__enum__ = format_tga_ImageType;
+format_tga_ImageType.UncompressedColorMapped = ["UncompressedColorMapped",1];
+format_tga_ImageType.UncompressedColorMapped.toString = $estr;
+format_tga_ImageType.UncompressedColorMapped.__enum__ = format_tga_ImageType;
+format_tga_ImageType.UncompressedTrueColor = ["UncompressedTrueColor",2];
+format_tga_ImageType.UncompressedTrueColor.toString = $estr;
+format_tga_ImageType.UncompressedTrueColor.__enum__ = format_tga_ImageType;
+format_tga_ImageType.UncompressedBlackAndWhite = ["UncompressedBlackAndWhite",3];
+format_tga_ImageType.UncompressedBlackAndWhite.toString = $estr;
+format_tga_ImageType.UncompressedBlackAndWhite.__enum__ = format_tga_ImageType;
+format_tga_ImageType.RunLengthColorMapped = ["RunLengthColorMapped",4];
+format_tga_ImageType.RunLengthColorMapped.toString = $estr;
+format_tga_ImageType.RunLengthColorMapped.__enum__ = format_tga_ImageType;
+format_tga_ImageType.RunLengthTrueColor = ["RunLengthTrueColor",5];
+format_tga_ImageType.RunLengthTrueColor.toString = $estr;
+format_tga_ImageType.RunLengthTrueColor.__enum__ = format_tga_ImageType;
+format_tga_ImageType.RunLengthBlackAndWhite = ["RunLengthBlackAndWhite",6];
+format_tga_ImageType.RunLengthBlackAndWhite.toString = $estr;
+format_tga_ImageType.RunLengthBlackAndWhite.__enum__ = format_tga_ImageType;
+format_tga_ImageType.Unknown = function(type) { var $x = ["Unknown",7,type]; $x.__enum__ = format_tga_ImageType; $x.toString = $estr; return $x; };
+format_tga_ImageType.__empty_constructs__ = [format_tga_ImageType.NoImage,format_tga_ImageType.UncompressedColorMapped,format_tga_ImageType.UncompressedTrueColor,format_tga_ImageType.UncompressedBlackAndWhite,format_tga_ImageType.RunLengthColorMapped,format_tga_ImageType.RunLengthTrueColor,format_tga_ImageType.RunLengthBlackAndWhite];
+var format_tga_Reader = function(i) {
+	this.i = i;
+	i.set_bigEndian(false);
+};
+$hxClasses["format.tga.Reader"] = format_tga_Reader;
+format_tga_Reader.__name__ = ["format","tga","Reader"];
+format_tga_Reader.prototype = {
+	read: function() {
+		var idLength = this.i.readByte();
+		var header = this.readHeader();
+		var id = idLength == 0 ? "" : this.i.readString(idLength);
+		var colorMap = this.readColorMapData(header);
+		return { header : header, imageId : id, colorMapData : colorMap, imageData : this.readImageData(header,colorMap), developerData : null};
+	}
+	,readHeader: function() {
+		var colorMapType = this.i.readByte();
+		var dataType;
+		var dataId = this.i.readByte();
+		switch(dataId) {
+		case 0:
+			dataType = format_tga_ImageType.NoImage;
+			break;
+		case 1:
+			dataType = format_tga_ImageType.UncompressedColorMapped;
+			break;
+		case 2:
+			dataType = format_tga_ImageType.UncompressedTrueColor;
+			break;
+		case 3:
+			dataType = format_tga_ImageType.UncompressedBlackAndWhite;
+			break;
+		case 9:
+			dataType = format_tga_ImageType.RunLengthColorMapped;
+			break;
+		case 10:
+			dataType = format_tga_ImageType.RunLengthTrueColor;
+			break;
+		case 11:
+			dataType = format_tga_ImageType.RunLengthBlackAndWhite;
+			break;
+		default:
+			dataType = format_tga_ImageType.Unknown(dataId);
+		}
+		var colorMapOrigin = this.i.readInt16();
+		var colorMapLength = this.i.readInt16();
+		var colorMapDepth = this.i.readByte();
+		var xOrigin = this.i.readInt16();
+		var yOrigin = this.i.readInt16();
+		var width = this.i.readInt16();
+		var height = this.i.readInt16();
+		var depth = this.i.readByte();
+		var descriptor = this.i.readByte();
+		var origin;
+		switch(descriptor & 48) {
+		case 16:
+			origin = format_tga_ImageOrigin.BottomRight;
+			break;
+		case 32:
+			origin = format_tga_ImageOrigin.TopLeft;
+			break;
+		case 48:
+			origin = format_tga_ImageOrigin.TopRight;
+			break;
+		default:
+			origin = format_tga_ImageOrigin.BottomLeft;
+		}
+		return { colorMapType : colorMapType, imageType : dataType, colorMapFirstIndex : colorMapOrigin, colorMapLength : colorMapLength, colorMapEntrySize : colorMapDepth, xOrigin : xOrigin, yOrigin : yOrigin, width : width, height : height, bitsPerPixel : depth, alphaChannelBits : descriptor & 15, imageOrigin : origin};
+	}
+	,readColorMapData: function(header) {
+		if(header.colorMapType == 0) {
+			return null;
+		}
+		return this.readPixels(header.colorMapEntrySize,header.colorMapLength,header.alphaChannelBits,false);
+	}
+	,readImageData: function(header,colorMap) {
+		switch(header.imageType[1]) {
+		case 0:
+			return null;
+		case 1:
+			return this.readIndexes(header.bitsPerPixel,header.width * header.height,colorMap,header.colorMapFirstIndex,false);
+		case 2:
+			return this.readPixels(header.bitsPerPixel,header.width * header.height,header.alphaChannelBits,false);
+		case 3:
+			return this.readMono(header.bitsPerPixel,header.width * header.height,header.alphaChannelBits,false);
+		case 4:
+			return this.readIndexes(header.bitsPerPixel,header.width * header.height,colorMap,header.colorMapFirstIndex,true);
+		case 5:
+			return this.readPixels(header.bitsPerPixel,header.width * header.height,header.alphaChannelBits,true);
+		case 6:
+			return this.readMono(header.bitsPerPixel,header.width * header.height,header.alphaChannelBits,true);
+		default:
+			throw new js__$Boot_HaxeError("Unsupported image data type!");
+		}
+	}
+	,readPixels: function(bitsPerPixel,amount,alphaChannelBits,rle) {
+		var list = new Array(amount);
+		var alpha = alphaChannelBits != 0;
+		var bitFieldSize = bitsPerPixel / 3 | 0;
+		if(bitFieldSize > 8) {
+			bitFieldSize = 8;
+		}
+		var parsePixel;
+		var readEntry;
+		switch(bitsPerPixel) {
+		case 8:
+			readEntry = ($_=this.i,$bind($_,$_.readByte));
+			parsePixel = $bind(this,this.parsePixel1);
+			break;
+		case 16:
+			readEntry = ($_=this.i,$bind($_,$_.readUInt16));
+			parsePixel = $bind(this,this.parsePixel2);
+			break;
+		case 24:
+			readEntry = ($_=this.i,$bind($_,$_.readUInt24));
+			parsePixel = $bind(this,this.parsePixel3);
+			break;
+		case 32:
+			readEntry = ($_=this.i,$bind($_,$_.readInt32));
+			parsePixel = $bind(this,this.parsePixel4);
+			break;
+		default:
+			throw new js__$Boot_HaxeError("Unsupported bits per pixels amount!");
+		}
+		if(rle) {
+			var rleChunk;
+			var i = 0;
+			while(i < amount) {
+				rleChunk = this.i.readByte();
+				if((rleChunk & 128) != 0) {
+					rleChunk &= 127;
+					var pixel = parsePixel(readEntry(),alpha);
+					while(rleChunk >= 0) {
+						list[i++] = pixel;
+						--rleChunk;
+					}
+				} else {
+					rleChunk &= 127;
+					while(rleChunk >= 0) {
+						list[i++] = parsePixel(readEntry(),alpha);
+						--rleChunk;
+					}
+				}
+			}
+		} else {
+			var _g1 = 0;
+			var _g = amount;
+			while(_g1 < _g) list[_g1++] = parsePixel(readEntry(),alpha);
+		}
+		return list;
+	}
+	,readMono: function(bitsPerPixel,amount,alphaChannelBits,rle) {
+		var list = new Array(amount);
+		var alpha = alphaChannelBits != 0;
+		var parsePixel;
+		var readEntry;
+		switch(bitsPerPixel) {
+		case 8:
+			readEntry = ($_=this.i,$bind($_,$_.readByte));
+			parsePixel = $bind(this,this.parsePixel1);
+			break;
+		case 16:
+			readEntry = ($_=this.i,$bind($_,$_.readUInt16));
+			parsePixel = $bind(this,this.parsePixelGreyAlpha);
+			break;
+		default:
+			throw new js__$Boot_HaxeError("Unsupported bits per pixels amount!");
+		}
+		if(rle) {
+			var rleChunk;
+			var i = 0;
+			while(i < amount) {
+				rleChunk = this.i.readByte();
+				if((rleChunk & 128) != 0) {
+					rleChunk &= 127;
+					var pixel = parsePixel(readEntry(),alpha);
+					while(rleChunk >= 0) {
+						list[i++] = pixel;
+						--rleChunk;
+					}
+				} else {
+					rleChunk &= 127;
+					while(rleChunk >= 0) {
+						list[i++] = parsePixel(readEntry(),alpha);
+						--rleChunk;
+					}
+				}
+			}
+		} else {
+			var _g1 = 0;
+			var _g = amount;
+			while(_g1 < _g) list[_g1++] = parsePixel(readEntry(),alpha);
+		}
+		return list;
+	}
+	,readIndexes: function(bitsPerPixel,amount,colorMap,offset,rle) {
+		var list = new Array(amount);
+		var readEntry;
+		switch(bitsPerPixel) {
+		case 8:
+			readEntry = ($_=this.i,$bind($_,$_.readByte));
+			break;
+		case 16:
+			readEntry = ($_=this.i,$bind($_,$_.readUInt16));
+			break;
+		case 24:
+			readEntry = ($_=this.i,$bind($_,$_.readUInt24));
+			break;
+		case 32:
+			readEntry = ($_=this.i,$bind($_,$_.readInt32));
+			break;
+		default:
+			throw new js__$Boot_HaxeError("Unsupported bits per pixels amount!");
+		}
+		if(rle) {
+			var i = 0;
+			var rleChunk;
+			while(i < amount) {
+				rleChunk = this.i.readByte();
+				if((rleChunk & 128) != 0) {
+					rleChunk &= 127;
+					var pixel = colorMap[offset + readEntry()];
+					while(rleChunk >= 0) {
+						list[i++] = pixel;
+						--rleChunk;
+					}
+				} else {
+					rleChunk &= 127;
+					while(rleChunk >= 0) {
+						list[i++] = colorMap[offset + readEntry()];
+						--rleChunk;
+					}
+				}
+			}
+		} else {
+			var _g1 = 0;
+			var _g = amount;
+			while(_g1 < _g) list[_g1++] = colorMap[offset + readEntry()];
+		}
+		return list;
+	}
+	,parsePixel1: function(value,alpha) {
+		return value << 16 | value << 8 | value;
+	}
+	,parsePixelGreyAlpha: function(value,alpha) {
+		return (alpha ? (value & 65280) << 16 : 0) | this.parsePixel1(value & 255,false);
+	}
+	,parsePixel2: function(value,alpha) {
+		return (alpha ? (value & 32768) == 1 ? -16777216 : 0 : 0) | (((value & 31744) >> 10) / 31 * 255 | 0) << 16 | (((value & 992) >> 5) / 31 * 255 | 0) << 8 | ((value & 31) / 31 * 255 | 0);
+	}
+	,parsePixel3: function(value,alpha) {
+		return value;
+	}
+	,parsePixel4: function(value,alpha) {
+		return value;
+	}
+	,__class__: format_tga_Reader
+};
+var format_tools_Inflate = function() { };
+$hxClasses["format.tools.Inflate"] = format_tools_Inflate;
+format_tools_Inflate.__name__ = ["format","tools","Inflate"];
+format_tools_Inflate.run = function(bytes) {
+	return haxe_zip_Uncompress.run(bytes);
+};
 var h2d_BlendMode = $hxClasses["h2d.BlendMode"] = { __ename__ : true, __constructs__ : ["None","Alpha","Add","AlphaAdd","SoftAdd","Multiply","Erase","Screen","Sub","Max","Min"] };
 h2d_BlendMode.None = ["None",0];
 h2d_BlendMode.None.toString = $estr;
@@ -4032,6 +5621,15 @@ h2d_Tile.prototype = {
 			this.u2 = (this.x + this.width) / tex.width;
 			this.v2 = (this.y + this.height) / tex.height;
 		}
+	}
+	,sub: function(x,y,w,h,dx,dy) {
+		if(dy == null) {
+			dy = 0;
+		}
+		if(dx == null) {
+			dx = 0;
+		}
+		return new h2d_Tile(this.innerTex,this.x + x,this.y + y,w,h,dx,dy);
 	}
 	,__class__: h2d_Tile
 };
@@ -8186,6 +9784,23 @@ h3d_mat_Texture.prototype = {
 	,set_wrap: function(w) {
 		this.bits = this.bits & -193 | w[1] << 6;
 		return this.wrap = w;
+	}
+	,resize: function(width,height) {
+		this.dispose();
+		var tw = 1;
+		var th = 1;
+		while(tw < width) tw <<= 1;
+		while(th < height) th <<= 1;
+		if(tw != width || th != height) {
+			this.flags |= 16;
+		} else {
+			this.flags &= -17;
+		}
+		this.width = width;
+		this.height = height;
+		if((this.flags & 32) == 0) {
+			this.alloc();
+		}
 	}
 	,clear: function(color,alpha,layer) {
 		if(layer == null) {
@@ -13379,6 +14994,24 @@ haxe_MainLoop.tick = function() {
 	}
 	return wait;
 };
+var haxe_Resource = function() { };
+$hxClasses["haxe.Resource"] = haxe_Resource;
+haxe_Resource.__name__ = ["haxe","Resource"];
+haxe_Resource.getBytes = function(name) {
+	var _g = 0;
+	var _g1 = haxe_Resource.content;
+	while(_g < _g1.length) {
+		var x = _g1[_g];
+		++_g;
+		if(x.name == name) {
+			if(x.str != null) {
+				return haxe_io_Bytes.ofString(x.str);
+			}
+			return haxe_crypto_Base64.decode(x.data);
+		}
+	}
+	return null;
+};
 var haxe_Timer = function(time_ms) {
 	var me = this;
 	this.id = setInterval(function() {
@@ -13744,6 +15377,42 @@ haxe_Unserializer.prototype = {
 	}
 	,__class__: haxe_Unserializer
 };
+var haxe_crypto_Adler32 = function() {
+	this.a1 = 1;
+	this.a2 = 0;
+};
+$hxClasses["haxe.crypto.Adler32"] = haxe_crypto_Adler32;
+haxe_crypto_Adler32.__name__ = ["haxe","crypto","Adler32"];
+haxe_crypto_Adler32.read = function(i) {
+	var a = new haxe_crypto_Adler32();
+	var a2a = i.readByte();
+	var a2b = i.readByte();
+	a.a1 = i.readByte() << 8 | i.readByte();
+	a.a2 = a2a << 8 | a2b;
+	return a;
+};
+haxe_crypto_Adler32.prototype = {
+	update: function(b,pos,len) {
+		var a1 = this.a1;
+		var a2 = this.a2;
+		var _g1 = pos;
+		var _g = pos + len;
+		while(_g1 < _g) {
+			a1 = (a1 + b.b[_g1++]) % 65521;
+			a2 = (a2 + a1) % 65521;
+		}
+		this.a1 = a1;
+		this.a2 = a2;
+	}
+	,equals: function(a) {
+		if(a.a1 == this.a1) {
+			return a.a2 == this.a2;
+		} else {
+			return false;
+		}
+	}
+	,__class__: haxe_crypto_Adler32
+};
 var haxe_io_Bytes = function(data) {
 	this.length = data.byteLength;
 	this.b = new Uint8Array(data);
@@ -13797,6 +15466,13 @@ haxe_io_Bytes.prototype = {
 			this.b.set(src.b.subarray(srcpos,srcpos + len),pos);
 		}
 	}
+	,fill: function(pos,len,value) {
+		var _g1 = 0;
+		while(_g1 < len) {
+			++_g1;
+			this.b[pos++] = value & 255;
+		}
+	}
 	,getInt32: function(pos) {
 		if(this.data == null) {
 			this.data = new DataView(this.b.buffer,this.b.byteOffset,this.b.byteLength);
@@ -13809,7 +15485,146 @@ haxe_io_Bytes.prototype = {
 		}
 		this.data.setInt32(pos,v,true);
 	}
+	,getString: function(pos,len) {
+		if(pos < 0 || len < 0 || pos + len > this.length) {
+			throw new js__$Boot_HaxeError(haxe_io_Error.OutsideBounds);
+		}
+		var s = "";
+		var b = this.b;
+		var fcc = String.fromCharCode;
+		var i = pos;
+		var max = pos + len;
+		while(i < max) {
+			var c = b[i++];
+			if(c < 128) {
+				if(c == 0) {
+					break;
+				}
+				s += fcc(c);
+			} else if(c < 224) {
+				s += fcc((c & 63) << 6 | b[i++] & 127);
+			} else if(c < 240) {
+				s += fcc((c & 31) << 12 | (b[i++] & 127) << 6 | b[i++] & 127);
+			} else {
+				var u = (c & 15) << 18 | (b[i++] & 127) << 12 | (b[i++] & 127) << 6 | b[i++] & 127;
+				s += fcc((u >> 10) + 55232);
+				s += fcc(u & 1023 | 56320);
+			}
+		}
+		return s;
+	}
+	,toString: function() {
+		return this.getString(0,this.length);
+	}
 	,__class__: haxe_io_Bytes
+};
+var haxe_crypto_Base64 = function() { };
+$hxClasses["haxe.crypto.Base64"] = haxe_crypto_Base64;
+haxe_crypto_Base64.__name__ = ["haxe","crypto","Base64"];
+haxe_crypto_Base64.decode = function(str,complement) {
+	if(complement == null) {
+		complement = true;
+	}
+	if(complement) {
+		while(HxOverrides.cca(str,str.length - 1) == 61) str = HxOverrides.substr(str,0,-1);
+	}
+	return new haxe_crypto_BaseCode(haxe_crypto_Base64.BYTES).decodeBytes(haxe_io_Bytes.ofString(str));
+};
+var haxe_crypto_BaseCode = function(base) {
+	var len = base.length;
+	var nbits = 1;
+	while(len > 1 << nbits) ++nbits;
+	if(nbits > 8 || len != 1 << nbits) {
+		throw new js__$Boot_HaxeError("BaseCode : base length must be a power of two.");
+	}
+	this.base = base;
+	this.nbits = nbits;
+};
+$hxClasses["haxe.crypto.BaseCode"] = haxe_crypto_BaseCode;
+haxe_crypto_BaseCode.__name__ = ["haxe","crypto","BaseCode"];
+haxe_crypto_BaseCode.prototype = {
+	initTable: function() {
+		var tbl = [];
+		var _g = 0;
+		while(_g < 256) tbl[_g++] = -1;
+		var _g1 = 0;
+		var _g2 = this.base.length;
+		while(_g1 < _g2) {
+			var i = _g1++;
+			tbl[this.base.b[i]] = i;
+		}
+		this.tbl = tbl;
+	}
+	,decodeBytes: function(b) {
+		var nbits = this.nbits;
+		if(this.tbl == null) {
+			this.initTable();
+		}
+		var tbl = this.tbl;
+		var size = b.length * nbits >> 3;
+		var out = new haxe_io_Bytes(new ArrayBuffer(size));
+		var buf = 0;
+		var curbits = 0;
+		var pin = 0;
+		var pout = 0;
+		while(pout < size) {
+			while(curbits < 8) {
+				curbits += nbits;
+				buf <<= nbits;
+				var i = tbl[b.b[pin++]];
+				if(i == -1) {
+					throw new js__$Boot_HaxeError("BaseCode : invalid encoded char");
+				}
+				buf |= i;
+			}
+			curbits -= 8;
+			out.b[pout++] = buf >> curbits & 255 & 255;
+		}
+		return out;
+	}
+	,__class__: haxe_crypto_BaseCode
+};
+var haxe_crypto_Crc32 = function() {
+	this.crc = -1;
+};
+$hxClasses["haxe.crypto.Crc32"] = haxe_crypto_Crc32;
+haxe_crypto_Crc32.__name__ = ["haxe","crypto","Crc32"];
+haxe_crypto_Crc32.prototype = {
+	'byte': function(b) {
+		var tmp = (this.crc ^ b) & 255;
+		var _g = 0;
+		while(_g < 8) {
+			++_g;
+			if((tmp & 1) == 1) {
+				tmp = tmp >>> 1 ^ -306674912;
+			} else {
+				tmp >>>= 1;
+			}
+		}
+		this.crc = this.crc >>> 8 ^ tmp;
+	}
+	,update: function(b,pos,len) {
+		var b1 = b.b.bufferValue;
+		var _g1 = pos;
+		var _g = pos + len;
+		while(_g1 < _g) {
+			var tmp = (this.crc ^ b1.bytes[_g1++]) & 255;
+			var _g2 = 0;
+			while(_g2 < 8) {
+				++_g2;
+				if((tmp & 1) == 1) {
+					tmp = tmp >>> 1 ^ -306674912;
+				} else {
+					tmp >>>= 1;
+				}
+			}
+			this.crc = this.crc >>> 8 ^ tmp;
+		}
+	}
+	,get: function() {
+		return this.crc ^ -1;
+	}
+	,__class__: haxe_crypto_Crc32
 };
 var haxe_crypto_Md5 = function() {
 };
@@ -14485,6 +16300,194 @@ haxe_ds_StringMap.prototype = {
 	}
 	,__class__: haxe_ds_StringMap
 };
+var haxe_io_BytesBuffer = function() {
+	this.b = [];
+};
+$hxClasses["haxe.io.BytesBuffer"] = haxe_io_BytesBuffer;
+haxe_io_BytesBuffer.__name__ = ["haxe","io","BytesBuffer"];
+haxe_io_BytesBuffer.prototype = {
+	getBytes: function() {
+		var bytes = new haxe_io_Bytes(new Uint8Array(this.b).buffer);
+		this.b = null;
+		return bytes;
+	}
+	,__class__: haxe_io_BytesBuffer
+};
+var haxe_io_Input = function() { };
+$hxClasses["haxe.io.Input"] = haxe_io_Input;
+haxe_io_Input.__name__ = ["haxe","io","Input"];
+haxe_io_Input.prototype = {
+	readByte: function() {
+		throw new js__$Boot_HaxeError("Not implemented");
+	}
+	,readBytes: function(s,pos,len) {
+		var k = len;
+		var b = s.b;
+		if(pos < 0 || len < 0 || pos + len > s.length) {
+			throw new js__$Boot_HaxeError(haxe_io_Error.OutsideBounds);
+		}
+		try {
+			while(k > 0) {
+				b[pos] = this.readByte();
+				++pos;
+				--k;
+			}
+		} catch( eof ) {
+			if (eof instanceof js__$Boot_HaxeError) eof = eof.val;
+			if( js_Boot.__instanceof(eof,haxe_io_Eof) ) {
+			} else throw(eof);
+		}
+		return len - k;
+	}
+	,set_bigEndian: function(b) {
+		this.bigEndian = b;
+		return b;
+	}
+	,readFullBytes: function(s,pos,len) {
+		while(len > 0) {
+			var k = this.readBytes(s,pos,len);
+			if(k == 0) {
+				throw new js__$Boot_HaxeError(haxe_io_Error.Blocked);
+			}
+			pos += k;
+			len -= k;
+		}
+	}
+	,read: function(nbytes) {
+		var s = new haxe_io_Bytes(new ArrayBuffer(nbytes));
+		var p = 0;
+		while(nbytes > 0) {
+			var k = this.readBytes(s,p,nbytes);
+			if(k == 0) {
+				throw new js__$Boot_HaxeError(haxe_io_Error.Blocked);
+			}
+			p += k;
+			nbytes -= k;
+		}
+		return s;
+	}
+	,readInt16: function() {
+		var ch1 = this.readByte();
+		var ch2 = this.readByte();
+		var n = this.bigEndian ? ch2 | ch1 << 8 : ch1 | ch2 << 8;
+		if((n & 32768) != 0) {
+			return n - 65536;
+		}
+		return n;
+	}
+	,readUInt16: function() {
+		var ch1 = this.readByte();
+		var ch2 = this.readByte();
+		if(this.bigEndian) {
+			return ch2 | ch1 << 8;
+		} else {
+			return ch1 | ch2 << 8;
+		}
+	}
+	,readUInt24: function() {
+		var ch1 = this.readByte();
+		var ch2 = this.readByte();
+		var ch3 = this.readByte();
+		if(this.bigEndian) {
+			return ch3 | ch2 << 8 | ch1 << 16;
+		} else {
+			return ch1 | ch2 << 8 | ch3 << 16;
+		}
+	}
+	,readInt32: function() {
+		var ch1 = this.readByte();
+		var ch2 = this.readByte();
+		var ch3 = this.readByte();
+		var ch4 = this.readByte();
+		if(this.bigEndian) {
+			return ch4 | ch3 << 8 | ch2 << 16 | ch1 << 24;
+		} else {
+			return ch1 | ch2 << 8 | ch3 << 16 | ch4 << 24;
+		}
+	}
+	,readString: function(len) {
+		var b = new haxe_io_Bytes(new ArrayBuffer(len));
+		this.readFullBytes(b,0,len);
+		return b.toString();
+	}
+	,__class__: haxe_io_Input
+};
+var haxe_io_BytesInput = function(b,pos,len) {
+	if(pos == null) {
+		pos = 0;
+	}
+	if(len == null) {
+		len = b.length - pos;
+	}
+	if(pos < 0 || len < 0 || pos + len > b.length) {
+		throw new js__$Boot_HaxeError(haxe_io_Error.OutsideBounds);
+	}
+	this.b = b.b;
+	this.pos = pos;
+	this.len = len;
+	this.totlen = len;
+};
+$hxClasses["haxe.io.BytesInput"] = haxe_io_BytesInput;
+haxe_io_BytesInput.__name__ = ["haxe","io","BytesInput"];
+haxe_io_BytesInput.__super__ = haxe_io_Input;
+haxe_io_BytesInput.prototype = $extend(haxe_io_Input.prototype,{
+	readByte: function() {
+		if(this.len == 0) {
+			throw new js__$Boot_HaxeError(new haxe_io_Eof());
+		}
+		this.len--;
+		return this.b[this.pos++];
+	}
+	,readBytes: function(buf,pos,len) {
+		if(pos < 0 || len < 0 || pos + len > buf.length) {
+			throw new js__$Boot_HaxeError(haxe_io_Error.OutsideBounds);
+		}
+		if(this.len == 0 && len > 0) {
+			throw new js__$Boot_HaxeError(new haxe_io_Eof());
+		}
+		if(this.len < len) {
+			len = this.len;
+		}
+		var b1 = this.b;
+		var b2 = buf.b;
+		var _g1 = 0;
+		var _g = len;
+		while(_g1 < _g) {
+			var i = _g1++;
+			b2[pos + i] = b1[this.pos + i];
+		}
+		this.pos += len;
+		this.len -= len;
+		return len;
+	}
+	,__class__: haxe_io_BytesInput
+});
+var haxe_io_Output = function() { };
+$hxClasses["haxe.io.Output"] = haxe_io_Output;
+haxe_io_Output.__name__ = ["haxe","io","Output"];
+var haxe_io_BytesOutput = function() {
+	this.b = new haxe_io_BytesBuffer();
+};
+$hxClasses["haxe.io.BytesOutput"] = haxe_io_BytesOutput;
+haxe_io_BytesOutput.__name__ = ["haxe","io","BytesOutput"];
+haxe_io_BytesOutput.__super__ = haxe_io_Output;
+haxe_io_BytesOutput.prototype = $extend(haxe_io_Output.prototype,{
+	writeBytes: function(buf,pos,len) {
+		var _this = this.b;
+		if(pos < 0 || len < 0 || pos + len > buf.length) {
+			throw new js__$Boot_HaxeError(haxe_io_Error.OutsideBounds);
+		}
+		var b2 = buf.b;
+		var _g1 = pos;
+		var _g = pos + len;
+		while(_g1 < _g) _this.b.push(b2[_g1++]);
+		return len;
+	}
+	,getBytes: function() {
+		return this.b.getBytes();
+	}
+	,__class__: haxe_io_BytesOutput
+});
 var haxe_io_Eof = function() {
 };
 $hxClasses["haxe.io.Eof"] = haxe_io_Eof;
@@ -14685,6 +16688,507 @@ haxe_macro_Unop.OpNegBits = ["OpNegBits",4];
 haxe_macro_Unop.OpNegBits.toString = $estr;
 haxe_macro_Unop.OpNegBits.__enum__ = haxe_macro_Unop;
 haxe_macro_Unop.__empty_constructs__ = [haxe_macro_Unop.OpIncrement,haxe_macro_Unop.OpDecrement,haxe_macro_Unop.OpNot,haxe_macro_Unop.OpNeg,haxe_macro_Unop.OpNegBits];
+var haxe_zip_Huffman = $hxClasses["haxe.zip.Huffman"] = { __ename__ : true, __constructs__ : ["Found","NeedBit","NeedBits"] };
+haxe_zip_Huffman.Found = function(i) { var $x = ["Found",0,i]; $x.__enum__ = haxe_zip_Huffman; $x.toString = $estr; return $x; };
+haxe_zip_Huffman.NeedBit = function(left,right) { var $x = ["NeedBit",1,left,right]; $x.__enum__ = haxe_zip_Huffman; $x.toString = $estr; return $x; };
+haxe_zip_Huffman.NeedBits = function(n,table) { var $x = ["NeedBits",2,n,table]; $x.__enum__ = haxe_zip_Huffman; $x.toString = $estr; return $x; };
+haxe_zip_Huffman.__empty_constructs__ = [];
+var haxe_zip_HuffTools = function() {
+};
+$hxClasses["haxe.zip.HuffTools"] = haxe_zip_HuffTools;
+haxe_zip_HuffTools.__name__ = ["haxe","zip","HuffTools"];
+haxe_zip_HuffTools.prototype = {
+	treeDepth: function(t) {
+		switch(t[1]) {
+		case 0:
+			return 0;
+		case 1:
+			var da = this.treeDepth(t[2]);
+			var db = this.treeDepth(t[3]);
+			return 1 + (da < db ? da : db);
+		case 2:
+			throw new js__$Boot_HaxeError("assert");
+			break;
+		}
+	}
+	,treeCompress: function(t) {
+		var d = this.treeDepth(t);
+		if(d == 0) {
+			return t;
+		}
+		if(d == 1) {
+			if(t[1] == 1) {
+				return haxe_zip_Huffman.NeedBit(this.treeCompress(t[2]),this.treeCompress(t[3]));
+			} else {
+				throw new js__$Boot_HaxeError("assert");
+			}
+		}
+		var size = 1 << d;
+		var table = [];
+		var _g1 = 0;
+		while(_g1 < size) {
+			++_g1;
+			table.push(haxe_zip_Huffman.Found(-1));
+		}
+		this.treeWalk(table,0,0,d,t);
+		return haxe_zip_Huffman.NeedBits(d,table);
+	}
+	,treeWalk: function(table,p,cd,d,t) {
+		if(t[1] == 1) {
+			if(d > 0) {
+				this.treeWalk(table,p,cd + 1,d - 1,t[2]);
+				this.treeWalk(table,p | 1 << cd,cd + 1,d - 1,t[3]);
+			} else {
+				table[p] = this.treeCompress(t);
+			}
+		} else {
+			table[p] = this.treeCompress(t);
+		}
+	}
+	,treeMake: function(bits,maxbits,v,len) {
+		if(len > maxbits) {
+			throw new js__$Boot_HaxeError("Invalid huffman");
+		}
+		var idx = v << 5 | len;
+		if(bits.h.hasOwnProperty(idx)) {
+			return haxe_zip_Huffman.Found(bits.h[idx]);
+		}
+		v <<= 1;
+		++len;
+		return haxe_zip_Huffman.NeedBit(this.treeMake(bits,maxbits,v,len),this.treeMake(bits,maxbits,v | 1,len));
+	}
+	,make: function(lengths,pos,nlengths,maxbits) {
+		var counts = [];
+		var tmp = [];
+		if(maxbits > 32) {
+			throw new js__$Boot_HaxeError("Invalid huffman");
+		}
+		var _g1 = 0;
+		while(_g1 < maxbits) {
+			++_g1;
+			counts.push(0);
+			tmp.push(0);
+		}
+		var _g11 = 0;
+		while(_g11 < nlengths) {
+			var p = lengths[_g11++ + pos];
+			if(p >= maxbits) {
+				throw new js__$Boot_HaxeError("Invalid huffman");
+			}
+			counts[p]++;
+		}
+		var code = 0;
+		var _g12 = 1;
+		var _g = maxbits - 1;
+		while(_g12 < _g) {
+			var i = _g12++;
+			code = code + counts[i] << 1;
+			tmp[i] = code;
+		}
+		var bits = new haxe_ds_IntMap();
+		var _g13 = 0;
+		while(_g13 < nlengths) {
+			var i1 = _g13++;
+			var l = lengths[i1 + pos];
+			if(l != 0) {
+				var n = tmp[l - 1];
+				tmp[l - 1] = n + 1;
+				bits.h[n << 5 | l] = i1;
+			}
+		}
+		return this.treeCompress(haxe_zip_Huffman.NeedBit(this.treeMake(bits,maxbits,0,1),this.treeMake(bits,maxbits,1,1)));
+	}
+	,__class__: haxe_zip_HuffTools
+};
+var haxe_zip__$InflateImpl_Window = function(hasCrc) {
+	this.buffer = new haxe_io_Bytes(new ArrayBuffer(65536));
+	this.pos = 0;
+	if(hasCrc) {
+		this.crc = new haxe_crypto_Adler32();
+	}
+};
+$hxClasses["haxe.zip._InflateImpl.Window"] = haxe_zip__$InflateImpl_Window;
+haxe_zip__$InflateImpl_Window.__name__ = ["haxe","zip","_InflateImpl","Window"];
+haxe_zip__$InflateImpl_Window.prototype = {
+	slide: function() {
+		if(this.crc != null) {
+			this.crc.update(this.buffer,0,32768);
+		}
+		var b = new haxe_io_Bytes(new ArrayBuffer(65536));
+		this.pos -= 32768;
+		b.blit(0,this.buffer,32768,this.pos);
+		this.buffer = b;
+	}
+	,addBytes: function(b,p,len) {
+		if(this.pos + len > 65536) {
+			this.slide();
+		}
+		this.buffer.blit(this.pos,b,p,len);
+		this.pos += len;
+	}
+	,addByte: function(c) {
+		if(this.pos == 65536) {
+			this.slide();
+		}
+		this.buffer.b[this.pos] = c & 255;
+		this.pos++;
+	}
+	,getLastChar: function() {
+		return this.buffer.b[this.pos - 1];
+	}
+	,available: function() {
+		return this.pos;
+	}
+	,checksum: function() {
+		if(this.crc != null) {
+			this.crc.update(this.buffer,0,this.pos);
+		}
+		return this.crc;
+	}
+	,__class__: haxe_zip__$InflateImpl_Window
+};
+var haxe_zip__$InflateImpl_State = $hxClasses["haxe.zip._InflateImpl.State"] = { __ename__ : true, __constructs__ : ["Head","Block","CData","Flat","Crc","Dist","DistOne","Done"] };
+haxe_zip__$InflateImpl_State.Head = ["Head",0];
+haxe_zip__$InflateImpl_State.Head.toString = $estr;
+haxe_zip__$InflateImpl_State.Head.__enum__ = haxe_zip__$InflateImpl_State;
+haxe_zip__$InflateImpl_State.Block = ["Block",1];
+haxe_zip__$InflateImpl_State.Block.toString = $estr;
+haxe_zip__$InflateImpl_State.Block.__enum__ = haxe_zip__$InflateImpl_State;
+haxe_zip__$InflateImpl_State.CData = ["CData",2];
+haxe_zip__$InflateImpl_State.CData.toString = $estr;
+haxe_zip__$InflateImpl_State.CData.__enum__ = haxe_zip__$InflateImpl_State;
+haxe_zip__$InflateImpl_State.Flat = ["Flat",3];
+haxe_zip__$InflateImpl_State.Flat.toString = $estr;
+haxe_zip__$InflateImpl_State.Flat.__enum__ = haxe_zip__$InflateImpl_State;
+haxe_zip__$InflateImpl_State.Crc = ["Crc",4];
+haxe_zip__$InflateImpl_State.Crc.toString = $estr;
+haxe_zip__$InflateImpl_State.Crc.__enum__ = haxe_zip__$InflateImpl_State;
+haxe_zip__$InflateImpl_State.Dist = ["Dist",5];
+haxe_zip__$InflateImpl_State.Dist.toString = $estr;
+haxe_zip__$InflateImpl_State.Dist.__enum__ = haxe_zip__$InflateImpl_State;
+haxe_zip__$InflateImpl_State.DistOne = ["DistOne",6];
+haxe_zip__$InflateImpl_State.DistOne.toString = $estr;
+haxe_zip__$InflateImpl_State.DistOne.__enum__ = haxe_zip__$InflateImpl_State;
+haxe_zip__$InflateImpl_State.Done = ["Done",7];
+haxe_zip__$InflateImpl_State.Done.toString = $estr;
+haxe_zip__$InflateImpl_State.Done.__enum__ = haxe_zip__$InflateImpl_State;
+haxe_zip__$InflateImpl_State.__empty_constructs__ = [haxe_zip__$InflateImpl_State.Head,haxe_zip__$InflateImpl_State.Block,haxe_zip__$InflateImpl_State.CData,haxe_zip__$InflateImpl_State.Flat,haxe_zip__$InflateImpl_State.Crc,haxe_zip__$InflateImpl_State.Dist,haxe_zip__$InflateImpl_State.DistOne,haxe_zip__$InflateImpl_State.Done];
+var haxe_zip_InflateImpl = function(i,header,crc) {
+	if(crc == null) {
+		crc = true;
+	}
+	if(header == null) {
+		header = true;
+	}
+	this["final"] = false;
+	this.htools = new haxe_zip_HuffTools();
+	this.huffman = this.buildFixedHuffman();
+	this.huffdist = null;
+	this.len = 0;
+	this.dist = 0;
+	this.state = header ? haxe_zip__$InflateImpl_State.Head : haxe_zip__$InflateImpl_State.Block;
+	this.input = i;
+	this.bits = 0;
+	this.nbits = 0;
+	this.needed = 0;
+	this.output = null;
+	this.outpos = 0;
+	this.lengths = [];
+	var _g = 0;
+	while(_g < 19) {
+		++_g;
+		this.lengths.push(-1);
+	}
+	this.window = new haxe_zip__$InflateImpl_Window(crc);
+};
+$hxClasses["haxe.zip.InflateImpl"] = haxe_zip_InflateImpl;
+haxe_zip_InflateImpl.__name__ = ["haxe","zip","InflateImpl"];
+haxe_zip_InflateImpl.run = function(i,bufsize) {
+	if(bufsize == null) {
+		bufsize = 65536;
+	}
+	var buf = new haxe_io_Bytes(new ArrayBuffer(bufsize));
+	var output = new haxe_io_BytesBuffer();
+	var inflate = new haxe_zip_InflateImpl(i);
+	while(true) {
+		var len = inflate.readBytes(buf,0,bufsize);
+		if(len < 0 || len > buf.length) {
+			throw new js__$Boot_HaxeError(haxe_io_Error.OutsideBounds);
+		}
+		var b2 = buf.b;
+		var _g1 = 0;
+		while(_g1 < len) output.b.push(b2[_g1++]);
+		if(len < bufsize) {
+			break;
+		}
+	}
+	return output.getBytes();
+};
+haxe_zip_InflateImpl.prototype = {
+	buildFixedHuffman: function() {
+		if(haxe_zip_InflateImpl.FIXED_HUFFMAN != null) {
+			return haxe_zip_InflateImpl.FIXED_HUFFMAN;
+		}
+		var a = [];
+		var _g = 0;
+		while(_g < 288) {
+			var n = _g++;
+			a.push(n <= 143 ? 8 : n <= 255 ? 9 : n <= 279 ? 7 : 8);
+		}
+		haxe_zip_InflateImpl.FIXED_HUFFMAN = this.htools.make(a,0,288,10);
+		return haxe_zip_InflateImpl.FIXED_HUFFMAN;
+	}
+	,readBytes: function(b,pos,len) {
+		this.needed = len;
+		this.outpos = pos;
+		this.output = b;
+		if(len > 0) {
+			while(this.inflateLoop()) {
+			}
+		}
+		return len - this.needed;
+	}
+	,getBits: function(n) {
+		while(this.nbits < n) {
+			this.bits |= this.input.readByte() << this.nbits;
+			this.nbits += 8;
+		}
+		var b = this.bits & (1 << n) - 1;
+		this.nbits -= n;
+		this.bits >>= n;
+		return b;
+	}
+	,getBit: function() {
+		if(this.nbits == 0) {
+			this.nbits = 8;
+			this.bits = this.input.readByte();
+		}
+		var b = (this.bits & 1) == 1;
+		this.nbits--;
+		this.bits >>= 1;
+		return b;
+	}
+	,getRevBits: function(n) {
+		if(n == 0) {
+			return 0;
+		} else if(this.getBit()) {
+			return 1 << n - 1 | this.getRevBits(n - 1);
+		} else {
+			return this.getRevBits(n - 1);
+		}
+	}
+	,resetBits: function() {
+		this.bits = 0;
+		this.nbits = 0;
+	}
+	,addBytes: function(b,p,len) {
+		this.window.addBytes(b,p,len);
+		this.output.blit(this.outpos,b,p,len);
+		this.needed -= len;
+		this.outpos += len;
+	}
+	,addByte: function(b) {
+		this.window.addByte(b);
+		this.output.b[this.outpos] = b & 255;
+		this.needed--;
+		this.outpos++;
+	}
+	,addDistOne: function(n) {
+		var c = this.window.getLastChar();
+		var _g1 = 0;
+		while(_g1 < n) {
+			++_g1;
+			this.addByte(c);
+		}
+	}
+	,addDist: function(d,len) {
+		this.addBytes(this.window.buffer,this.window.pos - d,len);
+	}
+	,applyHuffman: function(h) {
+		switch(h[1]) {
+		case 0:
+			return h[2];
+		case 1:
+			return this.applyHuffman(this.getBit() ? h[3] : h[2]);
+		case 2:
+			return this.applyHuffman(h[3][this.getBits(h[2])]);
+		}
+	}
+	,inflateLengths: function(a,max) {
+		var i = 0;
+		var prev = 0;
+		while(i < max) {
+			var n = this.applyHuffman(this.huffman);
+			switch(n) {
+			case 0:case 1:case 2:case 3:case 4:case 5:case 6:case 7:case 8:case 9:case 10:case 11:case 12:case 13:case 14:case 15:
+				prev = n;
+				a[i] = n;
+				++i;
+				break;
+			case 16:
+				var end = i + 3 + this.getBits(2);
+				if(end > max) {
+					throw new js__$Boot_HaxeError("Invalid data");
+				}
+				while(i < end) {
+					a[i] = prev;
+					++i;
+				}
+				break;
+			case 17:
+				i += 3 + this.getBits(3);
+				if(i > max) {
+					throw new js__$Boot_HaxeError("Invalid data");
+				}
+				break;
+			case 18:
+				i += 11 + this.getBits(7);
+				if(i > max) {
+					throw new js__$Boot_HaxeError("Invalid data");
+				}
+				break;
+			default:
+				throw new js__$Boot_HaxeError("Invalid data");
+			}
+		}
+	}
+	,inflateLoop: function() {
+		switch(this.state[1]) {
+		case 0:
+			var cmf = this.input.readByte();
+			if((cmf & 15) != 8) {
+				throw new js__$Boot_HaxeError("Invalid data");
+			}
+			var flg = this.input.readByte();
+			if(((cmf << 8) + flg) % 31 != 0) {
+				throw new js__$Boot_HaxeError("Invalid data");
+			}
+			if((flg & 32) != 0) {
+				throw new js__$Boot_HaxeError("Unsupported dictionary");
+			}
+			this.state = haxe_zip__$InflateImpl_State.Block;
+			return true;
+		case 1:
+			this["final"] = this.getBit();
+			switch(this.getBits(2)) {
+			case 0:
+				this.len = this.input.readUInt16();
+				if(this.input.readUInt16() != 65535 - this.len) {
+					throw new js__$Boot_HaxeError("Invalid data");
+				}
+				this.state = haxe_zip__$InflateImpl_State.Flat;
+				var r = this.inflateLoop();
+				this.resetBits();
+				return r;
+			case 1:
+				this.huffman = this.buildFixedHuffman();
+				this.huffdist = null;
+				this.state = haxe_zip__$InflateImpl_State.CData;
+				return true;
+			case 2:
+				var hlit = this.getBits(5) + 257;
+				var hdist = this.getBits(5) + 1;
+				var hclen = this.getBits(4) + 4;
+				var _g1 = 0;
+				while(_g1 < hclen) this.lengths[haxe_zip_InflateImpl.CODE_LENGTHS_POS[_g1++]] = this.getBits(3);
+				var _g = hclen;
+				while(_g < 19) this.lengths[haxe_zip_InflateImpl.CODE_LENGTHS_POS[_g++]] = 0;
+				this.huffman = this.htools.make(this.lengths,0,19,8);
+				var lengths = [];
+				var _g11 = 0;
+				var _g2 = hlit + hdist;
+				while(_g11 < _g2) {
+					++_g11;
+					lengths.push(0);
+				}
+				this.inflateLengths(lengths,hlit + hdist);
+				this.huffdist = this.htools.make(lengths,hlit,hdist,16);
+				this.huffman = this.htools.make(lengths,0,hlit,16);
+				this.state = haxe_zip__$InflateImpl_State.CData;
+				return true;
+			default:
+				throw new js__$Boot_HaxeError("Invalid data");
+			}
+			break;
+		case 2:
+			var n = this.applyHuffman(this.huffman);
+			if(n < 256) {
+				this.addByte(n);
+				return this.needed > 0;
+			} else if(n == 256) {
+				this.state = this["final"] ? haxe_zip__$InflateImpl_State.Crc : haxe_zip__$InflateImpl_State.Block;
+				return true;
+			} else {
+				n -= 257;
+				var extra_bits = haxe_zip_InflateImpl.LEN_EXTRA_BITS_TBL[n];
+				if(extra_bits == -1) {
+					throw new js__$Boot_HaxeError("Invalid data");
+				}
+				this.len = haxe_zip_InflateImpl.LEN_BASE_VAL_TBL[n] + this.getBits(extra_bits);
+				var dist_code = this.huffdist == null ? this.getRevBits(5) : this.applyHuffman(this.huffdist);
+				extra_bits = haxe_zip_InflateImpl.DIST_EXTRA_BITS_TBL[dist_code];
+				if(extra_bits == -1) {
+					throw new js__$Boot_HaxeError("Invalid data");
+				}
+				this.dist = haxe_zip_InflateImpl.DIST_BASE_VAL_TBL[dist_code] + this.getBits(extra_bits);
+				if(this.dist > this.window.available()) {
+					throw new js__$Boot_HaxeError("Invalid data");
+				}
+				this.state = this.dist == 1 ? haxe_zip__$InflateImpl_State.DistOne : haxe_zip__$InflateImpl_State.Dist;
+				return true;
+			}
+			break;
+		case 3:
+			var rlen = this.len < this.needed ? this.len : this.needed;
+			var bytes = this.input.read(rlen);
+			this.len -= rlen;
+			this.addBytes(bytes,0,rlen);
+			if(this.len == 0) {
+				this.state = this["final"] ? haxe_zip__$InflateImpl_State.Crc : haxe_zip__$InflateImpl_State.Block;
+			}
+			return this.needed > 0;
+		case 4:
+			var calc = this.window.checksum();
+			if(calc == null) {
+				this.state = haxe_zip__$InflateImpl_State.Done;
+				return true;
+			}
+			if(!calc.equals(haxe_crypto_Adler32.read(this.input))) {
+				throw new js__$Boot_HaxeError("Invalid CRC");
+			}
+			this.state = haxe_zip__$InflateImpl_State.Done;
+			return true;
+		case 5:
+			while(this.len > 0 && this.needed > 0) {
+				var rdist = this.len < this.dist ? this.len : this.dist;
+				var rlen1 = this.needed < rdist ? this.needed : rdist;
+				this.addDist(this.dist,rlen1);
+				this.len -= rlen1;
+			}
+			if(this.len == 0) {
+				this.state = haxe_zip__$InflateImpl_State.CData;
+			}
+			return this.needed > 0;
+		case 6:
+			var rlen2 = this.len < this.needed ? this.len : this.needed;
+			this.addDistOne(rlen2);
+			this.len -= rlen2;
+			if(this.len == 0) {
+				this.state = haxe_zip__$InflateImpl_State.CData;
+			}
+			return this.needed > 0;
+		case 7:
+			return false;
+		}
+	}
+	,__class__: haxe_zip_InflateImpl
+};
+var haxe_zip_Uncompress = function() { };
+$hxClasses["haxe.zip.Uncompress"] = haxe_zip_Uncompress;
+haxe_zip_Uncompress.__name__ = ["haxe","zip","Uncompress"];
+haxe_zip_Uncompress.run = function(src,bufsize) {
+	return haxe_zip_InflateImpl.run(new haxe_io_BytesInput(src),bufsize);
+};
 var hxd_BitmapData = function(width,height) {
 	if(!(width == -101 && height == -102)) {
 		var canvas = window.document.createElement("canvas");
@@ -14905,6 +17409,14 @@ hxd_Flags.FlipY = ["FlipY",2];
 hxd_Flags.FlipY.toString = $estr;
 hxd_Flags.FlipY.__enum__ = hxd_Flags;
 hxd_Flags.__empty_constructs__ = [hxd_Flags.ReadOnly,hxd_Flags.AlphaPremultiplied,hxd_Flags.FlipY];
+var hxd__$Pixels_PixelsARGB_$Impl_$ = {};
+$hxClasses["hxd._Pixels.PixelsARGB_Impl_"] = hxd__$Pixels_PixelsARGB_$Impl_$;
+hxd__$Pixels_PixelsARGB_$Impl_$.__name__ = ["hxd","_Pixels","PixelsARGB_Impl_"];
+hxd__$Pixels_PixelsARGB_$Impl_$.fromPixels = function(p) {
+	p.convert(hxd_PixelFormat.ARGB);
+	p.setFlip(false);
+	return p;
+};
 var hxd_Pixels = function(width,height,bytes,format,offset) {
 	if(offset == null) {
 		offset = 0;
@@ -14950,6 +17462,9 @@ hxd_Pixels.getBytesPerPixel = function(format) {
 		return 4;
 	}
 };
+hxd_Pixels.alloc = function(width,height,format) {
+	return new hxd_Pixels(width,height,new haxe_io_Bytes(new ArrayBuffer(width * height * hxd_Pixels.getBytesPerPixel(format))),format);
+};
 hxd_Pixels.prototype = {
 	set_innerFormat: function(fmt) {
 		this.innerFormat = fmt;
@@ -14958,6 +17473,49 @@ hxd_Pixels.prototype = {
 	}
 	,invalidFormat: function() {
 		throw new js__$Boot_HaxeError("Unsupported format for this operation : " + Std.string(this.innerFormat));
+	}
+	,makeSquare: function(copy) {
+		var w = this.width;
+		var h = this.height;
+		var tw = w == 0 ? 0 : 1;
+		var th = h == 0 ? 0 : 1;
+		while(tw < w) tw <<= 1;
+		while(th < h) th <<= 1;
+		if(w == tw && h == th) {
+			return this;
+		}
+		var bpp = this.bytesPerPixel;
+		var out = new haxe_io_Bytes(new ArrayBuffer(tw * th * bpp));
+		var p = 0;
+		var b = this.offset;
+		var _g1 = 0;
+		while(_g1 < h) {
+			++_g1;
+			out.blit(p,this.bytes,b,w * bpp);
+			p += w * bpp;
+			b += w * bpp;
+			var _g3 = 0;
+			var _g2 = (tw - w) * bpp >> 2;
+			while(_g3 < _g2) {
+				++_g3;
+				out.setInt32(p,0);
+				p += 4;
+			}
+		}
+		var _g11 = 0;
+		var _g = (th - h) * tw * bpp >> 2;
+		while(_g11 < _g) {
+			++_g11;
+			out.setInt32(p,0);
+			p += 4;
+		}
+		if(copy) {
+			return new hxd_Pixels(tw,th,out,this.innerFormat);
+		}
+		this.bytes = out;
+		this.width = tw;
+		this.height = th;
+		return this;
 	}
 	,copyInner: function() {
 		var old = this.bytes;
@@ -16728,17 +19286,208 @@ hxd_earcut_Earcut.prototype = {
 var hxd_fmt_hmd_Library = function() { };
 $hxClasses["hxd.fmt.hmd.Library"] = hxd_fmt_hmd_Library;
 hxd_fmt_hmd_Library.__name__ = ["hxd","fmt","hmd","Library"];
+var hxd_fs_FileEntry = function() { };
+$hxClasses["hxd.fs.FileEntry"] = hxd_fs_FileEntry;
+hxd_fs_FileEntry.__name__ = ["hxd","fs","FileEntry"];
+hxd_fs_FileEntry.prototype = {
+	getBytes: function() {
+		return null;
+	}
+	,open: function() {
+	}
+	,skip: function(nbytes) {
+	}
+	,readByte: function() {
+		return 0;
+	}
+	,read: function(out,pos,size) {
+	}
+	,close: function() {
+	}
+	,load: function(onReady) {
+		if(!this.get_isAvailable()) {
+			throw new js__$Boot_HaxeError("load() not implemented");
+		} else if(onReady != null) {
+			onReady();
+		}
+	}
+	,loadBitmap: function(onLoaded) {
+		throw new js__$Boot_HaxeError("loadBitmap() not implemented");
+	}
+	,get_isAvailable: function() {
+		return true;
+	}
+	,get_path: function() {
+		throw new js__$Boot_HaxeError("path() not implemented");
+	}
+	,get_extension: function() {
+		var np = this.name.split(".");
+		if(np.length == 1) {
+			return "";
+		} else {
+			return np.pop().toLowerCase();
+		}
+	}
+	,__class__: hxd_fs_FileEntry
+};
 var hxd_fs_FileSystem = function() { };
 $hxClasses["hxd.fs.FileSystem"] = hxd_fs_FileSystem;
 hxd_fs_FileSystem.__name__ = ["hxd","fs","FileSystem"];
+hxd_fs_FileSystem.prototype = {
+	__class__: hxd_fs_FileSystem
+};
+var hxd_fs__$EmbedFileSystem_EmbedEntry = function(fs,name,relPath,data) {
+	this.fs = fs;
+	this.name = name;
+	this.relPath = relPath;
+	this.data = data;
+};
+$hxClasses["hxd.fs._EmbedFileSystem.EmbedEntry"] = hxd_fs__$EmbedFileSystem_EmbedEntry;
+hxd_fs__$EmbedFileSystem_EmbedEntry.__name__ = ["hxd","fs","_EmbedFileSystem","EmbedEntry"];
+hxd_fs__$EmbedFileSystem_EmbedEntry.__super__ = hxd_fs_FileEntry;
+hxd_fs__$EmbedFileSystem_EmbedEntry.prototype = $extend(hxd_fs_FileEntry.prototype,{
+	getBytes: function() {
+		if(this.bytes == null) {
+			this.open();
+		}
+		return this.bytes;
+	}
+	,open: function() {
+		if(this.bytes == null) {
+			this.bytes = haxe_Resource.getBytes(this.data);
+			if(this.bytes == null) {
+				throw new js__$Boot_HaxeError("Missing resource " + this.data);
+			}
+		}
+		this.readPos = 0;
+	}
+	,skip: function(nbytes) {
+		this.readPos += nbytes;
+	}
+	,readByte: function() {
+		return this.bytes.b[this.readPos++];
+	}
+	,read: function(out,pos,size) {
+		out.blit(pos,this.bytes,this.readPos,size);
+		this.readPos += size;
+	}
+	,close: function() {
+		this.bytes = null;
+		this.readPos = 0;
+	}
+	,load: function(onReady) {
+		if(onReady != null) {
+			haxe_Timer.delay(onReady,1);
+		}
+	}
+	,loadBitmap: function(onLoaded) {
+		var rawData = null;
+		var _g = 0;
+		var _g1 = haxe_Resource.content;
+		while(_g < _g1.length) {
+			var res = _g1[_g];
+			++_g;
+			if(res.name == this.data) {
+				rawData = res.data;
+				break;
+			}
+		}
+		if(rawData == null) {
+			throw new js__$Boot_HaxeError("Missing resource " + this.data);
+		}
+		var image = new Image();
+		image.onload = function(_) {
+			onLoaded(image);
+		};
+		var extra = "";
+		var _g11 = 0;
+		var _g2 = (3 - (rawData.length * 6 >> 3) * 4 % 3) % 3;
+		while(_g11 < _g2) {
+			++_g11;
+			extra += "=";
+		}
+		var tmp = "data:image/" + this.get_extension() + ";base64," + rawData;
+		image.src = tmp + extra;
+	}
+	,get_path: function() {
+		if(this.relPath == ".") {
+			return "<root>";
+		} else {
+			return this.relPath;
+		}
+	}
+	,__class__: hxd_fs__$EmbedFileSystem_EmbedEntry
+});
 var hxd_fs_EmbedFileSystem = function(root) {
 	this.root = root;
 };
 $hxClasses["hxd.fs.EmbedFileSystem"] = hxd_fs_EmbedFileSystem;
 hxd_fs_EmbedFileSystem.__name__ = ["hxd","fs","EmbedFileSystem"];
 hxd_fs_EmbedFileSystem.__interfaces__ = [hxd_fs_FileSystem];
+hxd_fs_EmbedFileSystem.resolve = function(path) {
+	return "R_" + path.replace(hxd_fs_EmbedFileSystem.invalidChars.r,"_");
+};
 hxd_fs_EmbedFileSystem.prototype = {
-	__class__: hxd_fs_EmbedFileSystem
+	splitPath: function(path) {
+		if(path == ".") {
+			return [];
+		} else {
+			return path.split("/");
+		}
+	}
+	,exists: function(path) {
+		var r = this.root;
+		var _g = 0;
+		var _g1 = this.splitPath(path);
+		while(_g < _g1.length) {
+			var p = _g1[_g];
+			++_g;
+			r = Reflect.field(r,p);
+			if(r == null) {
+				return false;
+			}
+		}
+		return true;
+	}
+	,get: function(path) {
+		if(!this.exists(path)) {
+			throw new js__$Boot_HaxeError(new hxd_fs_NotFound(path));
+		}
+		var id = hxd_fs_EmbedFileSystem.resolve(path);
+		return new hxd_fs__$EmbedFileSystem_EmbedEntry(this,path.split("/").pop(),path,id);
+	}
+	,__class__: hxd_fs_EmbedFileSystem
+};
+var hxd_fs_FileInput = function(f) {
+	this.f = f;
+	f.open();
+};
+$hxClasses["hxd.fs.FileInput"] = hxd_fs_FileInput;
+hxd_fs_FileInput.__name__ = ["hxd","fs","FileInput"];
+hxd_fs_FileInput.__super__ = haxe_io_Input;
+hxd_fs_FileInput.prototype = $extend(haxe_io_Input.prototype,{
+	skip: function(nbytes) {
+		this.f.skip(nbytes);
+	}
+	,readByte: function() {
+		return this.f.readByte();
+	}
+	,readBytes: function(b,pos,len) {
+		this.f.read(b,pos,len);
+		return len;
+	}
+	,close: function() {
+		this.f.close();
+	}
+	,__class__: hxd_fs_FileInput
+});
+var hxd_fs__$LoadedBitmap_LoadedBitmap_$Impl_$ = {};
+$hxClasses["hxd.fs._LoadedBitmap.LoadedBitmap_Impl_"] = hxd_fs__$LoadedBitmap_LoadedBitmap_$Impl_$;
+hxd_fs__$LoadedBitmap_LoadedBitmap_$Impl_$.__name__ = ["hxd","fs","_LoadedBitmap","LoadedBitmap_Impl_"];
+hxd_fs__$LoadedBitmap_LoadedBitmap_$Impl_$.toBitmap = function(this1) {
+	var bmp = new hxd_BitmapData(this1.width,this1.height);
+	bmp.ctx.drawImage(this1,0,0);
+	return bmp;
 };
 var hxd_fs_NotFound = function(path) {
 	this.path = path;
@@ -17213,18 +19962,264 @@ hxd_prefab_rfx_RendererFX.prototype = $extend(hxd_prefab_Prefab.prototype,{
 	}
 	,__class__: hxd_prefab_rfx_RendererFX
 });
-var hxd_res_Resource = function() { };
+var hxd_res_Resource = function(entry) {
+	this.entry = entry;
+};
 $hxClasses["hxd.res.Resource"] = hxd_res_Resource;
 hxd_res_Resource.__name__ = ["hxd","res","Resource"];
 hxd_res_Resource.prototype = {
-	__class__: hxd_res_Resource
+	watch: function(onChanged) {
+	}
+	,__class__: hxd_res_Resource
 };
-var hxd_res_Image = function() { };
+var hxd_res_Any = function(loader,entry) {
+	hxd_res_Resource.call(this,entry);
+	this.loader = loader;
+};
+$hxClasses["hxd.res.Any"] = hxd_res_Any;
+hxd_res_Any.__name__ = ["hxd","res","Any"];
+hxd_res_Any.__super__ = hxd_res_Resource;
+hxd_res_Any.prototype = $extend(hxd_res_Resource.prototype,{
+	toImage: function() {
+		return this.loader.loadCache(this.entry.get_path(),hxd_res_Image);
+	}
+	,__class__: hxd_res_Any
+});
+var hxd_res_Image = function(entry) {
+	hxd_res_Resource.call(this,entry);
+};
 $hxClasses["hxd.res.Image"] = hxd_res_Image;
 hxd_res_Image.__name__ = ["hxd","res","Image"];
 hxd_res_Image.__super__ = hxd_res_Resource;
 hxd_res_Image.prototype = $extend(hxd_res_Resource.prototype,{
-	__class__: hxd_res_Image
+	getFormat: function() {
+		this.getSize();
+		return this.inf.format;
+	}
+	,getSize: function() {
+		if(this.inf != null) {
+			return this.inf;
+		}
+		var f = new hxd_fs_FileInput(this.entry);
+		var width = 0;
+		var height = 0;
+		var format;
+		var head;
+		try {
+			head = f.readUInt16();
+		} catch( e ) {
+			if (e instanceof js__$Boot_HaxeError) e = e.val;
+			if( js_Boot.__instanceof(e,haxe_io_Eof) ) {
+				head = 0;
+			} else throw(e);
+		}
+		switch(head) {
+		case 18759:
+			format = 2;
+			f.readInt32();
+			width = f.readUInt16();
+			height = f.readUInt16();
+			break;
+		case 20617:
+			format = 1;
+			f.set_bigEndian(true);
+			f.skip(6);
+			while(true) {
+				var dataLen = f.readInt32();
+				if(f.readInt32() == 1229472850) {
+					width = f.readInt32();
+					height = f.readInt32();
+					break;
+				}
+				f.skip(dataLen + 4);
+			}
+			break;
+		case 55551:
+			format = 0;
+			f.set_bigEndian(true);
+			try {
+				while(true) switch(f.readUInt16()) {
+				case 65472:case 65474:
+					f.readUInt16();
+					f.readByte();
+					height = f.readUInt16();
+					width = f.readUInt16();
+					throw "__break__";
+					break;
+				default:
+					f.skip(f.readUInt16() - 2);
+				}
+			} catch( e ) { if( e != "__break__" ) throw e; }
+			break;
+		default:
+			if(this.entry.get_extension() == "tga") {
+				format = 3;
+				f.skip(10);
+				width = f.readUInt16();
+				height = f.readUInt16();
+			} else {
+				throw new js__$Boot_HaxeError("Unsupported texture format " + this.entry.get_path());
+			}
+		}
+		f.close();
+		this.inf = { width : width, height : height, format : format};
+		return this.inf;
+	}
+	,getPixels: function(fmt,flipY) {
+		this.getSize();
+		var pixels;
+		switch(this.inf.format) {
+		case 0:
+			var bytes = this.entry.getBytes();
+			var p;
+			try {
+				p = hxd_res_NanoJpeg.decode(bytes);
+			} catch( e ) {
+				if (e instanceof js__$Boot_HaxeError) e = e.val;
+				throw new js__$Boot_HaxeError("Failed to decode JPG " + this.entry.get_path() + " (" + Std.string(e) + ")");
+			}
+			pixels = new hxd_Pixels(p.width,p.height,p.pixels,hxd_PixelFormat.BGRA);
+			break;
+		case 1:
+			var png = new format_png_Reader(new haxe_io_BytesInput(this.entry.getBytes()));
+			png.checkCRC = false;
+			pixels = hxd_Pixels.alloc(this.inf.width,this.inf.height,hxd_PixelFormat.BGRA);
+			format_png_Tools.extract32(png.read(),pixels.bytes,flipY);
+			if(flipY) {
+				pixels.flags |= 4;
+			}
+			break;
+		case 2:
+			var gif = new format_gif_Reader(new haxe_io_BytesInput(this.entry.getBytes())).read();
+			pixels = new hxd_Pixels(this.inf.width,this.inf.height,format_gif_Tools.extractFullBGRA(gif,0),hxd_PixelFormat.BGRA);
+			break;
+		case 3:
+			var r = new format_tga_Reader(new haxe_io_BytesInput(this.entry.getBytes())).read();
+			if(r.header.imageType != format_tga_ImageType.UncompressedTrueColor || r.header.bitsPerPixel != 32) {
+				throw new js__$Boot_HaxeError("Not supported " + Std.string(r.header.imageType) + "/" + r.header.bitsPerPixel);
+			}
+			var w = r.header.width;
+			var h = r.header.height;
+			pixels = hxd_Pixels.alloc(w,h,hxd_PixelFormat.ARGB);
+			var access = hxd__$Pixels_PixelsARGB_$Impl_$.fromPixels(pixels);
+			var _g1 = 0;
+			while(_g1 < h) {
+				var y = _g1++;
+				var _g3 = 0;
+				while(_g3 < w) {
+					var x = _g3++;
+					var c = r.imageData[x + y * w];
+					access.bytes.setInt32((x + y * access.width << 2) + access.offset,c >>> 24 | c >> 8 & 65280 | c << 8 & 16711680 | c << 24);
+				}
+			}
+			switch(r.header.imageOrigin[1]) {
+			case 0:
+				pixels.flags |= 4;
+				break;
+			case 2:
+				break;
+			default:
+				throw new js__$Boot_HaxeError("Not supported " + Std.string(r.header.imageOrigin));
+			}
+			break;
+		}
+		if(fmt != null) {
+			pixels.convert(fmt);
+		}
+		if(flipY != null) {
+			pixels.setFlip(flipY);
+		}
+		return pixels;
+	}
+	,watchCallb: function() {
+		var w = this.inf.width;
+		var h = this.inf.height;
+		this.inf = null;
+		var s = this.getSize();
+		if(w != s.width || h != s.height) {
+			this.tex.resize(w,h);
+		}
+		this.tex.realloc = null;
+		this.loadTexture();
+	}
+	,loadTexture: function() {
+		var _gthis = this;
+		if(this.getFormat() != 0 && !hxd_res_Image.DEFAULT_ASYNC) {
+			var load = function() {
+				_gthis.tex.alloc();
+				var pixels = _gthis.getPixels(h3d_mat_Texture.nativeFormat);
+				if(pixels.width != _gthis.tex.width || pixels.height != _gthis.tex.height) {
+					pixels.makeSquare();
+				}
+				_gthis.tex.uploadPixels(pixels);
+				pixels.dispose();
+				_gthis.tex.realloc = $bind(_gthis,_gthis.loadTexture);
+				_gthis.watch($bind(_gthis,_gthis.watchCallb));
+			};
+			if(this.entry.get_isAvailable()) {
+				load();
+			} else {
+				this.entry.load(load);
+			}
+		} else {
+			this.tex.flags |= 512;
+			this.entry.loadBitmap(function(bmp) {
+				var bmp1 = hxd_fs__$LoadedBitmap_LoadedBitmap_$Impl_$.toBitmap(bmp);
+				_gthis.tex.alloc();
+				if(bmp1.ctx.canvas.width != _gthis.tex.width || bmp1.ctx.canvas.height != _gthis.tex.height) {
+					var pixels1 = bmp1.getPixels();
+					pixels1.makeSquare();
+					_gthis.tex.uploadPixels(pixels1);
+					pixels1.dispose();
+				} else {
+					_gthis.tex.uploadBitmap(bmp1);
+				}
+				bmp1.ctx = null;
+				bmp1.pixel = null;
+				_gthis.tex.realloc = $bind(_gthis,_gthis.loadTexture);
+				_gthis.tex.flags &= -513;
+				if(_gthis.tex.waitLoads != null) {
+					var arr = _gthis.tex.waitLoads;
+					_gthis.tex.waitLoads = null;
+					var _g = 0;
+					while(_g < arr.length) {
+						var f = arr[_g];
+						++_g;
+						f();
+					}
+				}
+				_gthis.watch($bind(_gthis,_gthis.watchCallb));
+			});
+		}
+	}
+	,toTexture: function() {
+		if(this.tex != null) {
+			return this.tex;
+		}
+		this.getSize();
+		var width = this.inf.width;
+		var height = this.inf.height;
+		if(!hxd_res_Image.ALLOW_NPOT) {
+			var tw = 1;
+			var th = 1;
+			while(tw < width) tw <<= 1;
+			while(th < height) th <<= 1;
+			width = tw;
+			height = th;
+		}
+		this.tex = new h3d_mat_Texture(width,height,[h3d_mat_TextureFlags.NoAlloc]);
+		if(hxd_res_Image.DEFAULT_FILTER != h3d_mat_Filter.Linear) {
+			this.tex.set_filter(hxd_res_Image.DEFAULT_FILTER);
+		}
+		this.tex.setName(this.entry.get_path());
+		this.loadTexture();
+		return this.tex;
+	}
+	,toTile: function() {
+		var size = this.getSize();
+		return h2d_Tile.fromTexture(this.toTexture()).sub(0,0,size.width,size.height);
+	}
+	,__class__: hxd_res_Image
 });
 var hxd_res_Loader = function(fs) {
 	this.fs = fs;
@@ -17233,7 +20228,836 @@ var hxd_res_Loader = function(fs) {
 $hxClasses["hxd.res.Loader"] = hxd_res_Loader;
 hxd_res_Loader.__name__ = ["hxd","res","Loader"];
 hxd_res_Loader.prototype = {
-	__class__: hxd_res_Loader
+	load: function(path) {
+		return new hxd_res_Any(this,this.fs.get(path));
+	}
+	,loadCache: function(path,c) {
+		var _this = this.cache;
+		var res = __map_reserved[path] != null ? _this.getReserved(path) : _this.h[path];
+		if(res == null) {
+			var entry = this.fs.get(path);
+			var old = hxd_res_Loader.currentInstance;
+			hxd_res_Loader.currentInstance = this;
+			res = Type.createInstance(c,[entry]);
+			hxd_res_Loader.currentInstance = old;
+			var _this1 = this.cache;
+			if(__map_reserved[path] != null) {
+				_this1.setReserved(path,res);
+			} else {
+				_this1.h[path] = res;
+			}
+		} else if(((res instanceof c) ? res : null) == null) {
+			throw new js__$Boot_HaxeError(path + " has been reintrepreted from " + Std.string(res == null ? null : js_Boot.getClass(res)) + " to " + Std.string(c));
+		}
+		return res;
+	}
+	,__class__: hxd_res_Loader
+};
+var hxd_res_Filter = $hxClasses["hxd.res.Filter"] = { __ename__ : true, __constructs__ : ["Fast","Chromatic"] };
+hxd_res_Filter.Fast = ["Fast",0];
+hxd_res_Filter.Fast.toString = $estr;
+hxd_res_Filter.Fast.__enum__ = hxd_res_Filter;
+hxd_res_Filter.Chromatic = ["Chromatic",1];
+hxd_res_Filter.Chromatic.toString = $estr;
+hxd_res_Filter.Chromatic.__enum__ = hxd_res_Filter;
+hxd_res_Filter.__empty_constructs__ = [hxd_res_Filter.Fast,hxd_res_Filter.Chromatic];
+var hxd_res__$NanoJpeg_Component = function() {
+};
+$hxClasses["hxd.res._NanoJpeg.Component"] = hxd_res__$NanoJpeg_Component;
+hxd_res__$NanoJpeg_Component.__name__ = ["hxd","res","_NanoJpeg","Component"];
+hxd_res__$NanoJpeg_Component.prototype = {
+	__class__: hxd_res__$NanoJpeg_Component
+};
+var hxd_res_NanoJpeg = function() {
+	this.comps = [new hxd_res__$NanoJpeg_Component(),new hxd_res__$NanoJpeg_Component(),new hxd_res__$NanoJpeg_Component()].slice(0);
+	this.qtab = [new Array(64),new Array(64),new Array(64),new Array(64)].slice(0);
+	this.counts = new Array(16);
+	this.block = new Array(64);
+	this.njZZ = [0,1,8,16,9,2,3,10,17,24,32,25,18,11,4,5,12,19,26,33,40,48,41,34,27,20,13,6,7,14,21,28,35,42,49,56,57,50,43,36,29,22,15,23,30,37,44,51,58,59,52,45,38,31,39,46,53,60,61,54,47,55,62,63].slice(0);
+	this.vlctab = [null,null,null,null,null,null,null,null].slice(0);
+};
+$hxClasses["hxd.res.NanoJpeg"] = hxd_res_NanoJpeg;
+hxd_res_NanoJpeg.__name__ = ["hxd","res","NanoJpeg"];
+hxd_res_NanoJpeg.decode = function(bytes,filter,position,size) {
+	if(size == null) {
+		size = -1;
+	}
+	if(position == null) {
+		position = 0;
+	}
+	if(hxd_res_NanoJpeg.inst == null) {
+		hxd_res_NanoJpeg.inst = new hxd_res_NanoJpeg();
+	}
+	hxd_res_NanoJpeg.inst.njInit(bytes,position,size,filter);
+	return hxd_res_NanoJpeg.inst.njDecode();
+};
+hxd_res_NanoJpeg.prototype = {
+	njInit: function(bytes,pos,size,filter) {
+		this.bytes = bytes;
+		this.pos = pos;
+		this.filter = filter == null ? hxd_res_Filter.Chromatic : filter;
+		if(size < 0) {
+			size = bytes.length - pos;
+		}
+		var _g = 0;
+		while(_g < 4) {
+			var i = _g++;
+			if(this.vlctab[i] == null) {
+				this.vlctab[i] = new haxe_io_Bytes(new ArrayBuffer(131072));
+			}
+		}
+		this.size = size;
+		this.qtused = 0;
+		this.qtavail = 0;
+		this.rstinterval = 0;
+		this.length = 0;
+		this.buf = 0;
+		this.bufbits = 0;
+		this.progressive = false;
+		var _g1 = 0;
+		while(_g1 < 3) this.comps[_g1++].dcpred = 0;
+	}
+	,cleanup: function() {
+		this.bytes = null;
+		var _g = 0;
+		var _g1 = this.comps;
+		while(_g < _g1.length) {
+			var c = _g1[_g];
+			++_g;
+			if(c.pixels != null) {
+				c.pixels = null;
+			}
+		}
+		var _g2 = 0;
+		while(_g2 < 8) {
+			var i = _g2++;
+			if(this.vlctab[i] != null) {
+				this.vlctab[i] = null;
+			}
+		}
+	}
+	,njShowBits: function(bits) {
+		if(bits == 0) {
+			return 0;
+		}
+		while(this.bufbits < bits) {
+			if(this.size <= 0) {
+				this.buf = this.buf << 8 | 255;
+				this.bufbits += 8;
+				continue;
+			}
+			var newbyte = this.bytes.b[this.pos];
+			this.pos++;
+			this.size--;
+			this.bufbits += 8;
+			this.buf = this.buf << 8 | newbyte;
+			if(newbyte == 255) {
+				var marker = this.bytes.b[this.pos];
+				this.pos++;
+				this.size--;
+				switch(marker) {
+				case 217:
+					this.size = 0;
+					break;
+				case 0:case 255:
+					break;
+				default:
+					this.buf = this.buf << 8 | marker;
+					this.bufbits += 8;
+				}
+			}
+		}
+		return this.buf >> this.bufbits - bits & (1 << bits) - 1;
+	}
+	,njDecodeSOF: function() {
+		this.length = this.bytes.b[this.pos] << 8 | this.bytes.b[this.pos + 1];
+		this.pos += 2;
+		this.size -= 2;
+		this.length -= 2;
+		if(this.bytes.b[this.pos] != 8) {
+			this.notSupported();
+		}
+		this.height = this.bytes.b[this.pos + 1] << 8 | this.bytes.b[this.pos + 2];
+		this.width = this.bytes.b[this.pos + 3] << 8 | this.bytes.b[this.pos + 4];
+		this.ncomp = this.bytes.b[this.pos + 5];
+		this.pos += 6;
+		this.size -= 6;
+		this.length -= 6;
+		switch(this.ncomp) {
+		case 1:case 3:
+			break;
+		default:
+			this.notSupported();
+		}
+		var ssxmax = 0;
+		var ssymax = 0;
+		var _g2 = 0;
+		var _g1 = this.ncomp;
+		while(_g2 < _g1) {
+			var c = this.comps[_g2++];
+			c.cid = this.bytes.b[this.pos];
+			c.ssx = this.bytes.b[this.pos + 1] >> 4;
+			if((c.ssx & c.ssx - 1) != 0) {
+				this.notSupported();
+			}
+			c.ssy = this.bytes.b[this.pos + 1] & 15;
+			if((c.ssy & c.ssy - 1) != 0) {
+				this.notSupported();
+			}
+			c.qtsel = this.bytes.b[this.pos + 2];
+			this.pos += 3;
+			this.size -= 3;
+			this.length -= 3;
+			this.qtused |= 1 << c.qtsel;
+			if(c.ssx > ssxmax) {
+				ssxmax = c.ssx;
+			}
+			if(c.ssy > ssymax) {
+				ssymax = c.ssy;
+			}
+		}
+		if(this.ncomp == 1) {
+			var c1 = this.comps[0];
+			ssymax = 1;
+			ssxmax = 1;
+			c1.ssx = c1.ssy = 1;
+		}
+		this.mbsizex = ssxmax << 3;
+		this.mbsizey = ssymax << 3;
+		this.mbwidth = (this.width + this.mbsizex - 1) / this.mbsizex | 0;
+		this.mbheight = (this.height + this.mbsizey - 1) / this.mbsizey | 0;
+		var _g21 = 0;
+		var _g11 = this.ncomp;
+		while(_g21 < _g11) {
+			var c2 = this.comps[_g21++];
+			c2.width = (this.width * c2.ssx + ssxmax - 1) / ssxmax | 0;
+			c2.stride = c2.width + 7 & 2147483640;
+			c2.height = (this.height * c2.ssy + ssymax - 1) / ssymax | 0;
+			c2.stride = this.mbwidth * this.mbsizex * c2.ssx / ssxmax | 0;
+			if(c2.width < 3 && c2.ssx != ssxmax || c2.height < 3 && c2.ssy != ssymax) {
+				this.notSupported();
+			}
+			c2.pixels = new haxe_io_Bytes(new ArrayBuffer(c2.stride * (this.mbheight * this.mbsizey * c2.ssy / ssymax | 0)));
+		}
+		var count = this.length;
+		this.pos += count;
+		this.size -= count;
+		this.length -= count;
+	}
+	,njDecodeDQT: function() {
+		this.length = this.bytes.b[this.pos] << 8 | this.bytes.b[this.pos + 1];
+		this.pos += 2;
+		this.size -= 2;
+		this.length -= 2;
+		while(this.length >= 65) {
+			var i = this.bytes.b[this.pos];
+			this.qtavail |= 1 << i;
+			var t = this.qtab[i];
+			var _g = 0;
+			while(_g < 64) {
+				var k = _g++;
+				t[k] = this.bytes.b[this.pos + (k + 1)];
+			}
+			this.pos += 65;
+			this.size -= 65;
+			this.length -= 65;
+		}
+	}
+	,njDecodeDHT: function() {
+		this.length = this.bytes.b[this.pos] << 8 | this.bytes.b[this.pos + 1];
+		this.pos += 2;
+		this.size -= 2;
+		this.length -= 2;
+		while(this.length >= 17) {
+			var i = this.bytes.b[this.pos];
+			i = i >> 4 & 1 | (i & 3) << 1;
+			var _g = 0;
+			while(_g < 16) {
+				var codelen = _g++;
+				this.counts[codelen] = this.bytes.b[this.pos + (codelen + 1)];
+			}
+			this.pos += 17;
+			this.size -= 17;
+			this.length -= 17;
+			var vlc = this.vlctab[i];
+			var vpos = 0;
+			var remain = 65536;
+			var spread = 65536;
+			var _g1 = 1;
+			while(_g1 < 17) {
+				var codelen1 = _g1++;
+				spread >>= 1;
+				var currcnt = this.counts[codelen1 - 1];
+				if(currcnt == 0) {
+					continue;
+				}
+				remain -= currcnt << 16 - codelen1;
+				var _g2 = 0;
+				while(_g2 < currcnt) {
+					var code = this.bytes.b[this.pos + _g2++];
+					var _g4 = 0;
+					var _g3 = spread;
+					while(_g4 < _g3) {
+						++_g4;
+						vlc.b[vpos++] = codelen1 & 255;
+						vlc.b[vpos++] = code & 255;
+					}
+				}
+				this.pos += currcnt;
+				this.size -= currcnt;
+				this.length -= currcnt;
+			}
+			while(remain-- != 0) {
+				vlc.b[vpos] = 0;
+				vpos += 2;
+			}
+		}
+	}
+	,njDecodeDRI: function() {
+		this.length = this.bytes.b[this.pos] << 8 | this.bytes.b[this.pos + 1];
+		this.pos += 2;
+		this.size -= 2;
+		this.length -= 2;
+		this.rstinterval = this.bytes.b[this.pos] << 8 | this.bytes.b[this.pos + 1];
+		var count = this.length;
+		this.pos += count;
+		this.size -= count;
+		this.length -= count;
+	}
+	,njDecodeBlock: function(c,po) {
+		var out = c.pixels;
+		var value;
+		var coef = 0;
+		var _g = 0;
+		while(_g < 64) this.block[_g++] = 0;
+		var c1 = c.dcpred;
+		var vlc = this.vlctab[c.dctabsel];
+		var value1 = this.njShowBits(16);
+		var bits = vlc.b[value1 << 1];
+		if(this.bufbits < bits) {
+			this.njShowBits(bits);
+		}
+		this.bufbits -= bits;
+		value1 = vlc.b[value1 << 1 | 1];
+		this.vlcCode = value1;
+		bits = value1 & 15;
+		var tmp;
+		if(bits == 0) {
+			tmp = 0;
+		} else {
+			var r = this.njShowBits(bits);
+			this.bufbits -= bits;
+			value1 = r;
+			if(r < 1 << bits - 1) {
+				value1 = r + ((-1 << bits) + 1);
+			}
+			tmp = value1;
+		}
+		c.dcpred = c1 + tmp;
+		var qt = this.qtab[c.qtsel];
+		var at = this.vlctab[c.actabsel];
+		this.block[0] = c.dcpred * qt[0];
+		while(true) {
+			var value2 = this.njShowBits(16);
+			var bits1 = at.b[value2 << 1];
+			if(this.bufbits < bits1) {
+				this.njShowBits(bits1);
+			}
+			this.bufbits -= bits1;
+			value2 = at.b[value2 << 1 | 1];
+			this.vlcCode = value2;
+			bits1 = value2 & 15;
+			if(bits1 == 0) {
+				value = 0;
+			} else {
+				var r1 = this.njShowBits(bits1);
+				this.bufbits -= bits1;
+				value2 = r1;
+				if(r1 < 1 << bits1 - 1) {
+					value2 = r1 + ((-1 << bits1) + 1);
+				}
+				value = value2;
+			}
+			if(this.vlcCode == 0) {
+				break;
+			}
+			coef += (this.vlcCode >> 4) + 1;
+			this.block[this.njZZ[coef]] = value * qt[coef];
+			if(!(coef < 63)) {
+				break;
+			}
+		}
+		var _g1 = 0;
+		while(_g1 < 8) {
+			var bp = _g1++ * 8;
+			var x0;
+			var x1;
+			var x2;
+			var x3;
+			var x4;
+			var x5;
+			var x6;
+			var x7;
+			var x8;
+			x1 = this.block[bp + 4] << 11;
+			x2 = this.block[bp + 6];
+			x3 = this.block[bp + 2];
+			x4 = this.block[bp + 1];
+			x5 = this.block[bp + 7];
+			x6 = this.block[bp + 5];
+			x7 = this.block[bp + 3];
+			if((x1 | x2 | x3 | x4 | x5 | x6 | x7) == 0) {
+				var val = this.block[bp + 7] = this.block[bp] << 3;
+				var val1 = this.block[bp + 6] = val;
+				var val2 = this.block[bp + 5] = val1;
+				var val3 = this.block[bp + 4] = val2;
+				var val4 = this.block[bp + 3] = val3;
+				var val5 = this.block[bp + 2] = val4;
+				var val6 = this.block[bp + 1] = val5;
+				this.block[bp] = val6;
+			} else {
+				x0 = (this.block[bp] << 11) + 128;
+				x8 = 565 * (x4 + x5);
+				x4 = x8 + 2276 * x4;
+				x5 = x8 - 3406 * x5;
+				x8 = 2408 * (x6 + x7);
+				x6 = x8 - 799 * x6;
+				x7 = x8 - 4017 * x7;
+				x8 = x0 + x1;
+				x0 -= x1;
+				x1 = 1108 * (x3 + x2);
+				x2 = x1 - 3784 * x2;
+				x3 = x1 + 1568 * x3;
+				x1 = x4 + x6;
+				x4 -= x6;
+				x6 = x5 + x7;
+				x5 -= x7;
+				x7 = x8 + x3;
+				x8 -= x3;
+				x3 = x0 + x2;
+				x0 -= x2;
+				x2 = 181 * (x4 + x5) + 128 >> 8;
+				x4 = 181 * (x4 - x5) + 128 >> 8;
+				this.block[bp] = x7 + x1 >> 8;
+				this.block[bp + 1] = x3 + x2 >> 8;
+				this.block[bp + 2] = x0 + x4 >> 8;
+				this.block[bp + 3] = x8 + x6 >> 8;
+				this.block[bp + 4] = x8 - x6 >> 8;
+				this.block[bp + 5] = x0 - x4 >> 8;
+				this.block[bp + 6] = x3 - x2 >> 8;
+				this.block[bp + 7] = x7 - x1 >> 8;
+			}
+		}
+		var _g2 = 0;
+		while(_g2 < 8) {
+			var coef1 = _g2++;
+			var po1 = coef1 + po;
+			var stride = c.stride;
+			var x01;
+			var x11;
+			var x21;
+			var x31;
+			var x41;
+			var x51;
+			var x61;
+			var x71;
+			var x81;
+			x11 = this.block[coef1 + 32] << 8;
+			x21 = this.block[coef1 + 48];
+			x31 = this.block[coef1 + 16];
+			x41 = this.block[coef1 + 8];
+			x51 = this.block[coef1 + 56];
+			x61 = this.block[coef1 + 40];
+			x71 = this.block[coef1 + 24];
+			if((x11 | x21 | x31 | x41 | x51 | x61 | x71) == 0) {
+				var x = (this.block[coef1] + 32 >> 6) + 128;
+				if(x < 0) {
+					x11 = 0;
+				} else if(x > 255) {
+					x11 = 255;
+				} else {
+					x11 = x;
+				}
+				var _g3 = 0;
+				while(_g3 < 8) {
+					++_g3;
+					out.b[po1] = x11 & 255;
+					po1 += stride;
+				}
+			} else {
+				x01 = (this.block[coef1] << 8) + 8192;
+				x81 = 565 * (x41 + x51) + 4;
+				x41 = x81 + 2276 * x41 >> 3;
+				x51 = x81 - 3406 * x51 >> 3;
+				x81 = 2408 * (x61 + x71) + 4;
+				x61 = x81 - 799 * x61 >> 3;
+				x71 = x81 - 4017 * x71 >> 3;
+				x81 = x01 + x11;
+				x01 -= x11;
+				x11 = 1108 * (x31 + x21) + 4;
+				x21 = x11 - 3784 * x21 >> 3;
+				x31 = x11 + 1568 * x31 >> 3;
+				x11 = x41 + x61;
+				x41 -= x61;
+				x61 = x51 + x71;
+				x51 -= x71;
+				x71 = x81 + x31;
+				x81 -= x31;
+				x31 = x01 + x21;
+				x01 -= x21;
+				x21 = 181 * (x41 + x51) + 128 >> 8;
+				x41 = 181 * (x41 - x51) + 128 >> 8;
+				var x9 = (x71 + x11 >> 14) + 128;
+				out.b[po1] = (x9 < 0 ? 0 : x9 > 255 ? 255 : x9) & 255;
+				po1 += stride;
+				var x10 = (x31 + x21 >> 14) + 128;
+				out.b[po1] = (x10 < 0 ? 0 : x10 > 255 ? 255 : x10) & 255;
+				po1 += stride;
+				var x12 = (x01 + x41 >> 14) + 128;
+				out.b[po1] = (x12 < 0 ? 0 : x12 > 255 ? 255 : x12) & 255;
+				po1 += stride;
+				var x13 = (x81 + x61 >> 14) + 128;
+				out.b[po1] = (x13 < 0 ? 0 : x13 > 255 ? 255 : x13) & 255;
+				po1 += stride;
+				var x14 = (x81 - x61 >> 14) + 128;
+				out.b[po1] = (x14 < 0 ? 0 : x14 > 255 ? 255 : x14) & 255;
+				po1 += stride;
+				var x15 = (x01 - x41 >> 14) + 128;
+				out.b[po1] = (x15 < 0 ? 0 : x15 > 255 ? 255 : x15) & 255;
+				po1 += stride;
+				var x16 = (x31 - x21 >> 14) + 128;
+				out.b[po1] = (x16 < 0 ? 0 : x16 > 255 ? 255 : x16) & 255;
+				po1 += stride;
+				var x17 = (x71 - x11 >> 14) + 128;
+				out.b[po1] = (x17 < 0 ? 0 : x17 > 255 ? 255 : x17) & 255;
+			}
+		}
+	}
+	,notSupported: function() {
+		throw new js__$Boot_HaxeError("This JPG file is not supported");
+	}
+	,njDecodeScan: function() {
+		this.length = this.bytes.b[this.pos] << 8 | this.bytes.b[this.pos + 1];
+		this.pos += 2;
+		this.size -= 2;
+		this.length -= 2;
+		if(this.bytes.b[this.pos] != this.ncomp) {
+			this.notSupported();
+		}
+		this.pos += 1;
+		this.size -= 1;
+		this.length -= 1;
+		var _g1 = 0;
+		var _g = this.ncomp;
+		while(_g1 < _g) {
+			var c = this.comps[_g1++];
+			c.dctabsel = this.bytes.b[this.pos + 1] >> 4 << 1;
+			c.actabsel = (this.bytes.b[this.pos + 1] & 3) << 1 | 1;
+			this.pos += 2;
+			this.size -= 2;
+			this.length -= 2;
+		}
+		var start = this.bytes.b[this.pos];
+		if(!this.progressive && start != 0 || this.bytes.b[this.pos + 1] != 63 - start || this.bytes.b[this.pos + 2] != 0) {
+			this.notSupported();
+		}
+		var count = this.length;
+		this.pos += count;
+		this.size -= count;
+		this.length -= count;
+		var mbx = 0;
+		var mby = 0;
+		var rstcount = this.rstinterval;
+		while(true) {
+			var _g11 = 0;
+			var _g2 = this.ncomp;
+			while(_g11 < _g2) {
+				var c1 = this.comps[_g11++];
+				var _g3 = 0;
+				var _g21 = c1.ssy;
+				while(_g3 < _g21) {
+					var sby = _g3++;
+					var _g5 = 0;
+					var _g4 = c1.ssx;
+					while(_g5 < _g4) this.njDecodeBlock(c1,(mby * c1.ssy + sby) * c1.stride + mbx * c1.ssx + _g5++ << 3);
+				}
+			}
+			if(++mbx >= this.mbwidth) {
+				mbx = 0;
+				if(++mby >= this.mbheight) {
+					break;
+				}
+			}
+			if(this.rstinterval != 0 && --rstcount == 0) {
+				this.bufbits &= 248;
+				this.njShowBits(16);
+				this.bufbits -= 16;
+				rstcount = this.rstinterval;
+				var _g6 = 0;
+				while(_g6 < 3) this.comps[_g6++].dcpred = 0;
+			}
+		}
+	}
+	,njUpsampleH: function(c) {
+		var xmax = c.width - 3;
+		var cout = new haxe_io_Bytes(new ArrayBuffer(c.width * c.height << 1));
+		var lout = cout;
+		var lin = c.pixels;
+		var pi = 0;
+		var po = 0;
+		var _g1 = 0;
+		var _g = c.height;
+		while(_g1 < _g) {
+			++_g1;
+			var x = 139 * lin.b[pi] + -11 * lin.b[pi + 1] + 64 >> 7;
+			lout.b[po] = (x < 0 ? 0 : x > 255 ? 255 : x) & 255;
+			var x1 = 104 * lin.b[pi] + 27 * lin.b[pi + 1] + -3 * lin.b[pi + 2] + 64 >> 7;
+			lout.b[po + 1] = (x1 < 0 ? 0 : x1 > 255 ? 255 : x1) & 255;
+			var x2 = 28 * lin.b[pi] + 109 * lin.b[pi + 1] + -9 * lin.b[pi + 2] + 64 >> 7;
+			lout.b[po + 2] = (x2 < 0 ? 0 : x2 > 255 ? 255 : x2) & 255;
+			var _g3 = 0;
+			while(_g3 < xmax) {
+				var x3 = _g3++;
+				var x4 = -9 * lin.b[pi + x3] + 111 * lin.b[pi + x3 + 1] + 29 * lin.b[pi + x3 + 2] + -3 * lin.b[pi + x3 + 3] + 64 >> 7;
+				lout.b[po + (x3 << 1) + 3] = (x4 < 0 ? 0 : x4 > 255 ? 255 : x4) & 255;
+				var x5 = -3 * lin.b[pi + x3] + 29 * lin.b[pi + x3 + 1] + 111 * lin.b[pi + x3 + 2] + -9 * lin.b[pi + x3 + 3] + 64 >> 7;
+				lout.b[po + (x3 << 1) + 4] = (x5 < 0 ? 0 : x5 > 255 ? 255 : x5) & 255;
+			}
+			pi += c.stride;
+			po += c.width << 1;
+			var x6 = 28 * lin.b[pi - 1] + 109 * lin.b[pi - 2] + -9 * lin.b[pi - 3] + 64 >> 7;
+			lout.b[po - 3] = (x6 < 0 ? 0 : x6 > 255 ? 255 : x6) & 255;
+			var x7 = 104 * lin.b[pi - 1] + 27 * lin.b[pi - 2] + -3 * lin.b[pi - 3] + 64 >> 7;
+			lout.b[po - 2] = (x7 < 0 ? 0 : x7 > 255 ? 255 : x7) & 255;
+			var x8 = 139 * lin.b[pi - 1] + -11 * lin.b[pi - 2] + 64 >> 7;
+			lout.b[po - 1] = (x8 < 0 ? 0 : x8 > 255 ? 255 : x8) & 255;
+		}
+		c.width <<= 1;
+		c.stride = c.width;
+		c.pixels = cout;
+	}
+	,njUpsampleV: function(c) {
+		var w = c.width;
+		var s1 = c.stride;
+		var s2 = s1 + s1;
+		var out = new haxe_io_Bytes(new ArrayBuffer(c.width * c.height << 1));
+		var pi = 0;
+		var po = 0;
+		var cout = out;
+		var cin = c.pixels;
+		var _g1 = 0;
+		while(_g1 < w) {
+			var x = _g1++;
+			po = x;
+			pi = x;
+			var x1 = 139 * cin.b[pi] + -11 * cin.b[pi + s1] + 64 >> 7;
+			cout.b[x] = (x1 < 0 ? 0 : x1 > 255 ? 255 : x1) & 255;
+			po = x + w;
+			var x2 = 104 * cin.b[pi] + 27 * cin.b[pi + s1] + -3 * cin.b[pi + s2] + 64 >> 7;
+			cout.b[po] = (x2 < 0 ? 0 : x2 > 255 ? 255 : x2) & 255;
+			po += w;
+			var x3 = 28 * cin.b[pi] + 109 * cin.b[pi + s1] + -9 * cin.b[pi + s2] + 64 >> 7;
+			cout.b[po] = (x3 < 0 ? 0 : x3 > 255 ? 255 : x3) & 255;
+			po += w;
+			pi += s1;
+			var _g3 = 0;
+			var _g2 = c.height - 2;
+			while(_g3 < _g2) {
+				++_g3;
+				var x4 = -9 * cin.b[pi - s1] + 111 * cin.b[pi] + 29 * cin.b[pi + s1] + -3 * cin.b[pi + s2] + 64 >> 7;
+				cout.b[po] = (x4 < 0 ? 0 : x4 > 255 ? 255 : x4) & 255;
+				po += w;
+				var x5 = -3 * cin.b[pi - s1] + 29 * cin.b[pi] + 111 * cin.b[pi + s1] + -9 * cin.b[pi + s2] + 64 >> 7;
+				cout.b[po] = (x5 < 0 ? 0 : x5 > 255 ? 255 : x5) & 255;
+				po += w;
+				pi += s1;
+			}
+			pi += s1;
+			var x6 = 28 * cin.b[pi] + 109 * cin.b[pi - s1] + -9 * cin.b[pi - s2] + 64 >> 7;
+			cout.b[po] = (x6 < 0 ? 0 : x6 > 255 ? 255 : x6) & 255;
+			po += w;
+			var x7 = 104 * cin.b[pi] + 27 * cin.b[pi - s1] + -3 * cin.b[pi - s2] + 64 >> 7;
+			cout.b[po] = (x7 < 0 ? 0 : x7 > 255 ? 255 : x7) & 255;
+			po += w;
+			var x8 = 139 * cin.b[pi] + -11 * cin.b[pi - s1] + 64 >> 7;
+			cout.b[po] = (x8 < 0 ? 0 : x8 > 255 ? 255 : x8) & 255;
+		}
+		c.height <<= 1;
+		c.stride = c.width;
+		c.pixels = out;
+	}
+	,njUpsample: function(c) {
+		var xshift = 0;
+		var yshift = 0;
+		while(c.width < this.width) {
+			c.width <<= 1;
+			++xshift;
+		}
+		while(c.height < this.height) {
+			c.height <<= 1;
+			++yshift;
+		}
+		var out = new haxe_io_Bytes(new ArrayBuffer(c.width * c.height));
+		var lin = c.pixels;
+		var pout = 0;
+		var lout = out;
+		var _g1 = 0;
+		var _g = c.height;
+		while(_g1 < _g) {
+			var pin = (_g1++ >> yshift) * c.stride;
+			var _g3 = 0;
+			var _g2 = c.width;
+			while(_g3 < _g2) lout.b[pout++] = lin.b[(_g3++ >> xshift) + pin] & 255;
+		}
+		c.stride = c.width;
+		c.pixels = out;
+	}
+	,njConvert: function() {
+		var _g1 = 0;
+		var _g = this.ncomp;
+		while(_g1 < _g) {
+			var c = this.comps[_g1++];
+			switch(this.filter[1]) {
+			case 0:
+				if(c.width < this.width || c.height < this.height) {
+					this.njUpsample(c);
+				}
+				break;
+			case 1:
+				while(c.width < this.width || c.height < this.height) {
+					if(c.width < this.width) {
+						this.njUpsampleH(c);
+					}
+					if(c.height < this.height) {
+						this.njUpsampleV(c);
+					}
+				}
+				break;
+			}
+			if(c.width < this.width || c.height < this.height) {
+				throw new js__$Boot_HaxeError("assert");
+			}
+		}
+		var pixels = new haxe_io_Bytes(new ArrayBuffer(this.width * this.height * 4));
+		if(this.ncomp == 3) {
+			var py = this.comps[0].pixels;
+			var pcb = this.comps[1].pixels;
+			var pcr = this.comps[2].pixels;
+			var pix = pixels;
+			var k1 = 0;
+			var k2 = 0;
+			var k3 = 0;
+			var out = 0;
+			var _g11 = 0;
+			var _g2 = this.height;
+			while(_g11 < _g2) {
+				++_g11;
+				var _g3 = 0;
+				var _g21 = this.width;
+				while(_g3 < _g21) {
+					++_g3;
+					var y = py.b[k1++] << 8;
+					var cb = pcb.b[k2++] - 128;
+					var cr = pcr.b[k3++] - 128;
+					var x = y + 359 * cr + 128 >> 8;
+					var x1 = y - 88 * cb - 183 * cr + 128 >> 8;
+					var x2 = y + 454 * cb + 128 >> 8;
+					pix.b[out++] = (x2 < 0 ? 0 : x2 > 255 ? 255 : x2) & 255;
+					pix.b[out++] = (x1 < 0 ? 0 : x1 > 255 ? 255 : x1) & 255;
+					pix.b[out++] = (x < 0 ? 0 : x > 255 ? 255 : x) & 255;
+					pix.b[out++] = 255;
+				}
+				k1 += this.comps[0].stride - this.width;
+				k2 += this.comps[1].stride - this.width;
+				k3 += this.comps[2].stride - this.width;
+			}
+		} else {
+			throw new js__$Boot_HaxeError("TODO");
+		}
+		return pixels;
+	}
+	,njDecode: function() {
+		if(this.size < 2 || this.bytes.b[this.pos] != 255 || this.bytes.b[this.pos + 1] != 216) {
+			throw new js__$Boot_HaxeError("This file is not a JPEG");
+		}
+		this.pos += 2;
+		this.size -= 2;
+		this.length -= 2;
+		try {
+			while(true) {
+				this.pos += 2;
+				this.size -= 2;
+				this.length -= 2;
+				switch(this.bytes.b[this.pos + -1]) {
+				case 192:
+					this.njDecodeSOF();
+					break;
+				case 194:
+					this.progressive = true;
+					if(this.progressive) {
+						throw new js__$Boot_HaxeError("Unsupported progressive JPG");
+					}
+					var _g = 4;
+					while(_g < 8) {
+						var i = _g++;
+						if(this.vlctab[i] == null) {
+							this.vlctab[i] = new haxe_io_Bytes(new ArrayBuffer(131072));
+						}
+					}
+					this.njDecodeSOF();
+					break;
+				case 195:
+					throw new js__$Boot_HaxeError("Unsupported lossless JPG");
+					break;
+				case 196:
+					this.njDecodeDHT();
+					break;
+				case 218:
+					this.njDecodeScan();
+					throw "__break__";
+					break;
+				case 219:
+					this.njDecodeDQT();
+					break;
+				case 221:
+					this.njDecodeDRI();
+					break;
+				case 254:
+					this.length = this.bytes.b[this.pos] << 8 | this.bytes.b[this.pos + 1];
+					this.pos += 2;
+					this.size -= 2;
+					this.length -= 2;
+					var count = this.length;
+					this.pos += count;
+					this.size -= count;
+					this.length -= count;
+					break;
+				default:
+					switch(this.bytes.b[this.pos + -1] & 240) {
+					case 192:
+						throw new js__$Boot_HaxeError("Unsupported jpeg type " + (this.bytes.b[this.pos + -1] & 15));
+						break;
+					case 224:
+						this.length = this.bytes.b[this.pos] << 8 | this.bytes.b[this.pos + 1];
+						this.pos += 2;
+						this.size -= 2;
+						this.length -= 2;
+						var count1 = this.length;
+						this.pos += count1;
+						this.size -= count1;
+						this.length -= count1;
+						break;
+					default:
+						throw new js__$Boot_HaxeError("Unsupported jpeg tag 0x" + StringTools.hex(this.bytes.b[this.pos + -1],2));
+					}
+				}
+			}
+		} catch( e ) { if( e != "__break__" ) throw e; }
+		var pixels = this.njConvert();
+		this.cleanup();
+		return { pixels : pixels, width : this.width, height : this.height};
+	}
+	,__class__: hxd_res_NanoJpeg
 };
 var hxsl_Type = $hxClasses["hxsl.Type"] = { __ename__ : true, __constructs__ : ["TVoid","TInt","TBool","TFloat","TString","TVec","TMat3","TMat4","TMat3x4","TBytes","TSampler2D","TSampler2DArray","TSamplerCube","TStruct","TFun","TArray","TBuffer","TChannel"] };
 hxsl_Type.TVoid = ["TVoid",0];
@@ -25672,6 +29496,7 @@ var Bool = $hxClasses["Bool"] = Boolean;
 Bool.__ename__ = ["Bool"];
 var Class = $hxClasses["Class"] = { __name__ : ["Class"]};
 var Enum = { };
+haxe_Resource.content = [{ name : "R_openfl_png", data : "iVBORw0KGgoAAAANSUhEUgAAAGQAAABkCAYAAABw4pVUAAANSElEQVR4nOydC3AV1fnAv7N7b3gkIfw1CCiKmNyA+aNWrdI8UEap9YEmBBytHTudjtPntFVH7bSd1mk7fepYbWestvYxdWq1QEhU1FpxUPIQ8YkaIQ8tKgUUVB4Cyb13v37f3k0IZM/Zs3v3PpLc33DmLtnz+r5vz9nz3ggiQoH8wch1BgocScEgeUbBIHlGwSB5RsEgeUbBIHnGmDBIrKVdsMt1PsJAjIZ+SEVzxywhsJ4enwWGJXagwC76cwm5KeRKnWtmP7l95PbytUBRbRk4AyzYgCja+ppq38uNBPrkpUHmPfJshWWZSwDhQsrdp+hPJ8Dh0szGaNaMqolctXNtkdtGxegVELDWMJKPbr78vL5wc54+eWOQ+Q9sKB6YHP8GCnEdGaJK4ZWf/t9qRvttSJUidwR0kwLuKzoQvfv1axZ84iO7GSPnBqlY9Wy1YUZ+DIAXw+GqRwk95XdhqmpS+SklP9/RzAZVdeIJK5m4tW/ZeV2aYTJCzgwyt6XzfAusn9BlHTnTZ/CV5DZ7+JlHbrnPeJPk2g0wfrSlseYZn2FDIesGqV7ZOTNuWn+lR/iiwJEgPEfhn/Lws5j8fCaNNJ6MJo0vdS2v2R44jgBkzSDULDWpGrmZUvsBaFZNMiieXorn75CqtgZbVcxgq6uU/HyB/FSmlWluqQH8jOK5raexLplmXFpkxSAVrZ1VBloPQarF5BduHb1L7kV6ajvIGu10vYncQVKSa+adPskkcqdTmDoKU0vXZ5M7EYL1vV6xhHFVX0NNd4Cwvsi4QSpb226k/sBP6XKyj2ADpMT1AuHBhCVa32qq/SCMvJzS3DEtYmADCriaDLWQ/lTkI/gB6v/8sLeh/o4w8iIjYwahR5R7z/+g2K/yEYwV/2crUXR73/JzdmUkYw4VKzeWG5GBm+jyy+Sm6YYjuR6ikvl55LdMBsiIQcpWrYlON6c+TjFfqBmkm57aOz+ae9K9u+edaIWeIQXHbn7X+L8t73yVSuP19F9V/2cIMsrancmPL9mz7LJ42PkJ3SDzml8oSxj9a0WqzvZiPyD+AoT4VbZemjK40UF5+S7l5Xug0eggrb0YsSZcuLnp03vCzEeoBpn98IZji6x4G0U7zztlWGti5NrNjQuy2qz0Yl7LhplJkbifh228fePmASNav/WKBbvDSj80g8Qe2zBVDCSep9hiHl73CsCbuxvr/xBKwhmiqqXtKwjiNlANvYBdffVgUeTcnksXfBxGuqEMv4sVK0wYSDzjZQzK/NvUOz87343BcB45r5xnlT9bZpLd1kEIhGKQyujM3wO3+dW81m9EzulrXNgbRprZgPPKeabL1zy8nu7oIG3SNkhla/vV9Oxfp/aF7dFEyblh1rXZgvPMeWcZ1D7FdSldpEda75DYqrZKMMVLkBqucAfxqd7E9ovxyitz2opKF66SKiMzn6BW2GKFt32QxLN6ltUHrgUCG2RW2+uRSbv2vAqHJ4DcWLf/hPLF28+ZO6qNMcjMjVvMkm27eFBzkcJb18HysjPeq5+fCJJG4Cpr8q69d4LaGFujh8yGsWIMhmVhmehyq8JbtaObQAQqIVWPds7BhNUD8nmMQwYYdVsaa14KmrF8Zm5L51nUAuN3ykSJl6SIGLHuJTXKFpobgUoIJq3fgGJSSSDcNFaNwbBsLKPCi+noyDe+S0jVI51VlNgbdBmReGntaaxrDJKZTFCx6tmYaUaKZfd74tteC9rgiLW0t9BPg+R2QpjG/3df7m/IXqZUKWjZlpeFex8i/V/0E98pD68/3bSMjdTDsobKK2JqjZWg5xCHRlVxmON7FtgPk+CBV3vwVYCw+IoC/7J7aR33ssGImKvpoTvJjv9oBJScHJ1WTlfBetksa2ICV93Hud11dHWZnyh9VVlVj3ScRoJ9TuoB8a6eJRfs9RNnxDINwYOMgupjdByICbazr+2JJnY8n8JPeontEHlIgxyW0e9U8j+VbHEMxXOMNXzqFiEK3CwXUDbC8bxLGtiyksxSD6QrW2c+8GUQtPB2kL07EHYcnDb1137iyxTCezwtNGyZSXbJbdPRmTbaBjl19Xou9hfI7lOFcUfQtncGOCFbCbHMLLvUA+nM1p0m2gaJC+NrIH937Ni5tSqjU5s+KZ6/osvP9GxaOLLLSknE0Z0W2gYhj9J3hxBwx77ry/OpAzhw0Ng1O1uJseysA9l9le5c/HoTe+zJSfTClL2cPtmTPPA73QQDcJDch/Ty3OHD7TGEeWwG8zQCRweuy1FZd6xDnXi0mr2iv3g5NUSjkrsv72z67CGdeAKBvAIFl/UsrV+XsTRCgHUQa+l4mTJc73I7yjqk3/u94tEqIShwqeyeAOtxnTjGAypdqHQ4HM13iKiVpWMmDU+rjxccXUiGPqQ6PAJPg1S2rj+DfqZLbr/95rLad3USGg84upANKE53dKlEo4QYi2R3qAO2zjv8+EKtE7kuh3x4JoD2elhXEPFpr/DjDZVODMRZXuG9S4iAmfLQxlue4ccbCp2gEMd7BvdMwEK3kUybSCKRd3v0co1SJwpdDoX38iCEKJc0G+IJ0wxlVboXCOKCytUdM3T9922q/Sfe6jLcngUcnfCa3xH9NtalV3hPg9hD2u7sle3PCBNqv5cYIG6wpz10/ANMOnn2uhaARZnrrCpgncRa2nkKYsRIgUKXQ+j01Mtc/yoCTur4RIAw0c+OKwGHBspLc3sgAusGRxoEZLochjLjvFQfZGuuEPJz0RsClhftzu2pDnLdlDo6lTImjtY4mv5DxaNWLmXGnc0z7vvBhWuRzAfMeP/EXFdZMt3s89qQpPMO4Q0pI+s+5HnsrLCPBHyB0tPaR0Lvm4EB/pdL5Lrx3Nzj3ewF+JCEdJuCnMK7XTPf0hL0RPEOq5p/ZTadcHB2ALvuKWFdeoX3LNqIKNt8GY0kk9qbJYNjr/LJjwNZNHB04jp3pNDlEN51rSHel91KRCIVnuHHGUqdKHQ55MUzBVXdbVmneIZPG5H7E3L8oNAJyfFfr+DeVZYA6XyHEEK6LGi8otKJJYTnAWoazUNrnewOqvdJhASCMEZPCVHrRK7LQTwN0tuwkDfl7JTcnnPqqg7pfEk4ZLLTrTlApomjizmS2zsdXSrR7EBhh+SGSJrWtXpxBIQKRyKddwiC4rQFxKKI/wXnMhxdSJ4gqQ6PQG8ZEIrV9C5xXTWBYFxCPz/XiScQaRYQIeAjhTWtZDx6b6ylbcQ8OIV7o7uh/i9+0krpwj011qFOHFoGwQmfrISB4j+Ba/saz5ze/O+JmVybJdAMXEKQB/rkRi0lxTe5WR0B/0g/2gZhHUwxJp8puR23daiBVpXVc+lFB4V8r3ZxmTn5WzrxBIJNYQavslCI9ZBa/egHPoPxeT8BHB24bgxi3bEOdeLRHoSzAKRDF6SuG0vv3BXKSQZhE8UIHyfob/ZQQNxAY5Oud5addSC7r9Ld0WgbJIrWPfQj224wY/rsbmmG0kLQQ24FLyFvLj13twDjbnps9I+BRZy8P1L0uq53R3bZFHPC0Z0W2gZ5c+nCd0g50iUupLcbee+6bnzDQXuHFPa7O5gQJM7hdDfU3IJoXAGp5jtXHTzbuYdnF13SGyBpdm9bcvYBnbhZZpZd6oF0ZutOE18KFIa4CZP4MrjtohIwY9IHH98CPltcGE9ug6jxfWVzyoqmfT5K79JafphmzF/ReUy/mThZGOYcC+F44SILgvUf3XhtmYWQlY4k68xPPn0PE8Va29dQji+V3OZNnzG/+wxHK7FHn56i2PTJz9hjPQ11mdv0aadhGDeA/F1yHGXwb37jHLWkZJWttUo4uvKFb4PY+64FrFF4aaha3f5Nv/GONhwZZXvUuXSs8btHnQk09yxM2/LSLWzUq7+dj58IEvdogGVjGRVeko6OfBPIIHyGhwChaspNtMBqrn7wOeXxeKMRlollA/k5JzyDc0+Qc06YwKszDpRP4WNVVV8SmB2fmGzlI42CppFvsCwsE12qNpR2OboJRGCD2HvSk8h1qOqzEYtK3vvgibDOI8wlLAPLAuo5ID7ArCGd/fppz47ysXYC4QFQdiT4iL/SxV3Lz8jJett0qV756sR4ZN9TJGKdwhuf0HJNb0Pdg+mklfaCslQG8D61L1EXj+x/ns/1TTe9bMN55rx7GANYB+kagwllhV9vfPvXIfXFAhWnTbASGyta1qf7CYmswXnlPIN8j/4gmxwdpE0oBrHPmyqKnM+HCiv9AcwxwHiRDykOI91MwnnkvKJ8StbGlplkD+uQz8JR40cxZo4aH6RwGH96FD5XMdY/VzEUceGDLoEofPJIn9H9yaPhFD4Kpk/hs3lqxuZn84ZT+LCkmsKnV49k/H169WgKHyc+kpwbZJDC57tT5I1BhlP4wH2eU9HcMUsIrCeTLDAssYP6A2wUrt4GW1WDVR1VPUOtrv3U/6m2DJxBptiAKNr6mmo9dzDlmlFhEC+cfgdk4zCcTDMmDDKWGLVngoxVCgbJMwoGyTMKBskzCgbJMwoGyTP+FwAA//90J9F1qkiYOAAAAABJRU5ErkJggg"},{ name : "R_pixi_png", data : "iVBORw0KGgoAAAANSUhEUgAAAGQAAABkCAYAAABw4pVUAAAACXBIWXMAAAsTAAALEwEAmpwYAAA4KmlUWHRYTUw6Y29tLmFkb2JlLnhtcAAAAAAAPD94cGFja2V0IGJlZ2luPSLvu78iIGlkPSJXNU0wTXBDZWhpSHpyZVN6TlRjemtjOWQiPz4KPHg6eG1wbWV0YSB4bWxuczp4PSJhZG9iZTpuczptZXRhLyIgeDp4bXB0az0iQWRvYmUgWE1QIENvcmUgNS42LWMxMzIgNzkuMTU5Mjg0LCAyMDE2LzA0LzE5LTEzOjEzOjQwICAgICAgICAiPgogICA8cmRmOlJERiB4bWxuczpyZGY9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkvMDIvMjItcmRmLXN5bnRheC1ucyMiPgogICAgICA8cmRmOkRlc2NyaXB0aW9uIHJkZjphYm91dD0iIgogICAgICAgICAgICB4bWxuczp4bXA9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC8iCiAgICAgICAgICAgIHhtbG5zOmRjPSJodHRwOi8vcHVybC5vcmcvZGMvZWxlbWVudHMvMS4xLyIKICAgICAgICAgICAgeG1sbnM6cGhvdG9zaG9wPSJodHRwOi8vbnMuYWRvYmUuY29tL3Bob3Rvc2hvcC8xLjAvIgogICAgICAgICAgICB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIKICAgICAgICAgICAgeG1sbnM6c3RFdnQ9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZUV2ZW50IyIKICAgICAgICAgICAgeG1sbnM6dGlmZj0iaHR0cDovL25zLmFkb2JlLmNvbS90aWZmLzEuMC8iCiAgICAgICAgICAgIHhtbG5zOmV4aWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20vZXhpZi8xLjAvIj4KICAgICAgICAgPHhtcDpDcmVhdG9yVG9vbD5BZG9iZSBQaG90b3Nob3AgQ0MgMjAxNS41IChXaW5kb3dzKTwveG1wOkNyZWF0b3JUb29sPgogICAgICAgICA8eG1wOkNyZWF0ZURhdGU+MjAxNy0wMi0yMVQxNDo1MDoyNSswMzowMDwveG1wOkNyZWF0ZURhdGU+CiAgICAgICAgIDx4bXA6TW9kaWZ5RGF0ZT4yMDE3LTAyLTIxVDE0OjUxOjMzKzAzOjAwPC94bXA6TW9kaWZ5RGF0ZT4KICAgICAgICAgPHhtcDpNZXRhZGF0YURhdGU+MjAxNy0wMi0yMVQxNDo1MTozMyswMzowMDwveG1wOk1ldGFkYXRhRGF0ZT4KICAgICAgICAgPGRjOmZvcm1hdD5pbWFnZS9wbmc8L2RjOmZvcm1hdD4KICAgICAgICAgPHBob3Rvc2hvcDpDb2xvck1vZGU+MzwvcGhvdG9zaG9wOkNvbG9yTW9kZT4KICAgICAgICAgPHhtcE1NOkluc3RhbmNlSUQ+eG1wLmlpZDpmZDk3ZmM4YS00NzJjLWVkNGMtYTM3ZS02OTY2NGZmZWQ5MmY8L3htcE1NOkluc3RhbmNlSUQ+CiAgICAgICAgIDx4bXBNTTpEb2N1bWVudElEPnhtcC5kaWQ6ZmQ5N2ZjOGEtNDcyYy1lZDRjLWEzN2UtNjk2NjRmZmVkOTJmPC94bXBNTTpEb2N1bWVudElEPgogICAgICAgICA8eG1wTU06T3JpZ2luYWxEb2N1bWVudElEPnhtcC5kaWQ6ZmQ5N2ZjOGEtNDcyYy1lZDRjLWEzN2UtNjk2NjRmZmVkOTJmPC94bXBNTTpPcmlnaW5hbERvY3VtZW50SUQ+CiAgICAgICAgIDx4bXBNTTpIaXN0b3J5PgogICAgICAgICAgICA8cmRmOlNlcT4KICAgICAgICAgICAgICAgPHJkZjpsaSByZGY6cGFyc2VUeXBlPSJSZXNvdXJjZSI+CiAgICAgICAgICAgICAgICAgIDxzdEV2dDphY3Rpb24+Y3JlYXRlZDwvc3RFdnQ6YWN0aW9uPgogICAgICAgICAgICAgICAgICA8c3RFdnQ6aW5zdGFuY2VJRD54bXAuaWlkOmZkOTdmYzhhLTQ3MmMtZWQ0Yy1hMzdlLTY5NjY0ZmZlZDkyZjwvc3RFdnQ6aW5zdGFuY2VJRD4KICAgICAgICAgICAgICAgICAgPHN0RXZ0OndoZW4+MjAxNy0wMi0yMVQxNDo1MDoyNSswMzowMDwvc3RFdnQ6d2hlbj4KICAgICAgICAgICAgICAgICAgPHN0RXZ0OnNvZnR3YXJlQWdlbnQ+QWRvYmUgUGhvdG9zaG9wIENDIDIwMTUuNSAoV2luZG93cyk8L3N0RXZ0OnNvZnR3YXJlQWdlbnQ+CiAgICAgICAgICAgICAgIDwvcmRmOmxpPgogICAgICAgICAgICA8L3JkZjpTZXE+CiAgICAgICAgIDwveG1wTU06SGlzdG9yeT4KICAgICAgICAgPHRpZmY6T3JpZW50YXRpb24+MTwvdGlmZjpPcmllbnRhdGlvbj4KICAgICAgICAgPHRpZmY6WFJlc29sdXRpb24+NzIwMDAwLzEwMDAwPC90aWZmOlhSZXNvbHV0aW9uPgogICAgICAgICA8dGlmZjpZUmVzb2x1dGlvbj43MjAwMDAvMTAwMDA8L3RpZmY6WVJlc29sdXRpb24+CiAgICAgICAgIDx0aWZmOlJlc29sdXRpb25Vbml0PjI8L3RpZmY6UmVzb2x1dGlvblVuaXQ+CiAgICAgICAgIDxleGlmOkNvbG9yU3BhY2U+NjU1MzU8L2V4aWY6Q29sb3JTcGFjZT4KICAgICAgICAgPGV4aWY6UGl4ZWxYRGltZW5zaW9uPjEwMDwvZXhpZjpQaXhlbFhEaW1lbnNpb24+CiAgICAgICAgIDxleGlmOlBpeGVsWURpbWVuc2lvbj4xMDA8L2V4aWY6UGl4ZWxZRGltZW5zaW9uPgogICAgICA8L3JkZjpEZXNjcmlwdGlvbj4KICAgPC9yZGY6UkRGPgo8L3g6eG1wbWV0YT4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAKPD94cGFja2V0IGVuZD0idyI/PiOqc/AAAAAgY0hSTQAAeiUAAICDAAD5/wAAgOkAAHUwAADqYAAAOpgAABdvkl/FRgAABvhJREFUeNrsm2tsFVUQx28BKyDYUl8YdbBWwSdU8YNaNBAktIJoojZGQzWdiCJ8ABFRAhqMBHyggtTYGjWiRqQiaQqEKI3VCPhA5BECQa0iIPxB8EUpUOv1y1yz3tw95+zevffWMB/+n3Z2ztn57Z6dnTMbi8fjMVXnkQZBgagUiAJRKRAFolIgCkSlQBSIBkGBqBSIAlEpEAWiUiAKRKVAFIhKgagUiAJRKRAFolIgCkSlQBSISoGoFIgCUQUFAmI/5YE4H8TdQdxTlG+w99NdIG4G8WYQfwniqSF8BFUJiBfJmJtBXAtiysK4XvUA8QUgvhLE14H4WhAPAnExiHv5nRcD8RgQPwbi+SBeIsH7HMSbQLwNxDtA/K1oG4g3gPhDEC8E8TgQX2aY1AwQx1OoPoOBGAziwynGPAji/gH8TATxuyCuS9JiEE/2OacviB8EcYPErTXFPFpB3ALiJhDPAfFQEHf1Amn1CZqr/gLxKhDfkTS58y3n3ZohIKsMY74XwM9ag58NSbaFIJ4N4v0hY/iNxCsWAzHSBOLVByA+QyY51mJbkwEYvUC8zzDmLhCf7OjrfYOf5R67gSDeHkHsKAFkT4RA4iD+DsRdZN002S3IAJCeIP7ZMObuAECWGvysFJtBID4aQcwavUtW1EDicjE238MytGS9aRjz5QB+TEDeEZuWiOI1xRXIH5IZNYP4YxB/CuIDjoOMBvHVIG5LcWxWBl/q5/osIWtAXBQRkNkgnuAYh4MCbpfEM/l4h2RiTkDGp5joWSCuAvEPlonsE/tL5X3xEYjfAPFNWUg5u4P4UVnrG0B8v6TxsYiANEjWGbfYDAfx2SDuDeI+ID5PlvJJcjwO4kPeudmAmDKhQnl6TJMqz3LuH6WWprEEPec4xpDk7NQGZKzF4RUgPmY4f+oJCAQBEoeUH4bpALHl66vk5V0B4lEOuhnEd8ojbhrzIrEb5ajRYl+aBSA70rkRogBSn4EsbZlhvPw0MsNlWQDSDuIbcgmkMcSkOxxsRviMN8UhIH7HXsvSO2QniMtyASRPBg864UOSBf1psNmaYrzelvLEKyB+1XC8LiIge0F83OE654N4QDaBVKdxF/UD8UMWm4lJ480x2O4XYG9nAcjzsvy5XGebzKk8CiCVhpOHp1mYvEb87LR8mBZ6vn9MGV3i++aTLABZAOKLQ1zzV1IpLgwLpCrFElUqd6rtPbBdHm2/4xXic6jFz2yxe9pg85Znjk1ZANIgNk+EvBm/l4/VwED2yhd2A4hXyLre7jDgcdlnMVVBR3omssCyFA0E8U8+x/fIZlA2gaz02D2ZZlGxKAiQsBoH4m4Wm5FJT56pFHHEcOzGpEBmA8jyJNsqS9nf9rSck0kgr4vz4gBAYpK7Bx1rYYpA5gJITIL6Aoh/C3Ed6xNf91ECaQfxNM8ESwMCickFuY7XIkXEzgLEu1M6E8QbA8ZvelRAfpUq7iUp6lxBgcRA/LXDmL+A+HKf83MNxLsMl1t2Hr36HcQFNiAQtck63ipl92bp5Kg2dHOEBVLhMPlthkBEBcQUyBUBv8DLpHHEuodkA1ItOfMAKegVg/hUx0mEAdIFxKsd76h5OQTSGKIscorDdsVMG5Db06hchgEyM+ByOTiDQL4w+FkSMialls+GuiiKi1EBGRji/bUxQ0CKZE338/NSyJicZOnyqe1MQNYbKsN/G/w8kgEglZa5Tw4ZkwstXSozOguQ6Qa7SSB+ylK8owiB9HbosyoB8b1S1ukbICYNFr9jcgmkwrP7Z7LLB/HpFpvVjkBqxaZcSjtFsox0BXGB7C5ucdjr8O6UHpA+4rvlWnqk6PEtk1TZ5PcwiE/LJZAhDi/PRR5/iy3+bhG7Zocv+2ZP49wW6WP+0fG99bj4OOxTw9suKW6TVJ5duxqfjWrHMCyQEhDfZjh+TLrHE/76WTKU3dJKWm/Zx4g5pJ+mnc4+0skeZblpv/jNGZBD0nSwx2F58epFy4XNkhYcv+NzHfZgrOUNED8TIYwOAfxvcXF3DoAckZKL3/Gj3gqoRwWW89otnZUzxE9HiMAlEoJuckNF1Qddllx+N53wQJr/aYSd6DyD34fT8DtX/hEJWqubltT1UhOyqut9gdd4/hT4D5CVkjF8lqS1knWEBdJf+mnXpPDtp3WSMZ1p8NtNfntYF8BvwjdLGWiTT8+x9+W8QXZGSww9xPfJPydbLXs2ibpgkzQPlpi2cE9E5UlQhgmkCdJQMU725vuH+AIvAfH1IL5HVpbx4q8SxFdJT4C9yUF/tNS/cFUKRIGoFIgCUSkQBaJSIApEpUBUCkSBqBSIAlEpEAWiUiAKRKVAVApEgagUiAJRKRAFolIgCkSlQFQKRIGoFMj/Wv8MACLNT4FyZp8ZAAAAAElFTkSuQmCC"},{ name : "R_heaps_png", data : "iVBORw0KGgoAAAANSUhEUgAAAGQAAABkCAYAAABw4pVUAAAACXBIWXMAAAsTAAALEwEAmpwYAAA84GlUWHRYTUw6Y29tLmFkb2JlLnhtcAAAAAAAPD94cGFja2V0IGJlZ2luPSLvu78iIGlkPSJXNU0wTXBDZWhpSHpyZVN6TlRjemtjOWQiPz4KPHg6eG1wbWV0YSB4bWxuczp4PSJhZG9iZTpuczptZXRhLyIgeDp4bXB0az0iQWRvYmUgWE1QIENvcmUgNS42LWMxMzIgNzkuMTU5Mjg0LCAyMDE2LzA0LzE5LTEzOjEzOjQwICAgICAgICAiPgogICA8cmRmOlJERiB4bWxuczpyZGY9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkvMDIvMjItcmRmLXN5bnRheC1ucyMiPgogICAgICA8cmRmOkRlc2NyaXB0aW9uIHJkZjphYm91dD0iIgogICAgICAgICAgICB4bWxuczp4bXA9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC8iCiAgICAgICAgICAgIHhtbG5zOmRjPSJodHRwOi8vcHVybC5vcmcvZGMvZWxlbWVudHMvMS4xLyIKICAgICAgICAgICAgeG1sbnM6cGhvdG9zaG9wPSJodHRwOi8vbnMuYWRvYmUuY29tL3Bob3Rvc2hvcC8xLjAvIgogICAgICAgICAgICB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIKICAgICAgICAgICAgeG1sbnM6c3RFdnQ9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZUV2ZW50IyIKICAgICAgICAgICAgeG1sbnM6dGlmZj0iaHR0cDovL25zLmFkb2JlLmNvbS90aWZmLzEuMC8iCiAgICAgICAgICAgIHhtbG5zOmV4aWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20vZXhpZi8xLjAvIj4KICAgICAgICAgPHhtcDpDcmVhdG9yVG9vbD5BZG9iZSBQaG90b3Nob3AgQ0MgMjAxNS41IChXaW5kb3dzKTwveG1wOkNyZWF0b3JUb29sPgogICAgICAgICA8eG1wOkNyZWF0ZURhdGU+MjAxNy0wMi0yMVQxNDo1ODowMSswMzowMDwveG1wOkNyZWF0ZURhdGU+CiAgICAgICAgIDx4bXA6TW9kaWZ5RGF0ZT4yMDE3LTAyLTIxVDE1OjA4OjQ4KzAzOjAwPC94bXA6TW9kaWZ5RGF0ZT4KICAgICAgICAgPHhtcDpNZXRhZGF0YURhdGU+MjAxNy0wMi0yMVQxNTowODo0OCswMzowMDwveG1wOk1ldGFkYXRhRGF0ZT4KICAgICAgICAgPGRjOmZvcm1hdD5pbWFnZS9wbmc8L2RjOmZvcm1hdD4KICAgICAgICAgPHBob3Rvc2hvcDpDb2xvck1vZGU+MzwvcGhvdG9zaG9wOkNvbG9yTW9kZT4KICAgICAgICAgPHBob3Rvc2hvcDpUZXh0TGF5ZXJzPgogICAgICAgICAgICA8cmRmOkJhZz4KICAgICAgICAgICAgICAgPHJkZjpsaSByZGY6cGFyc2VUeXBlPSJSZXNvdXJjZSI+CiAgICAgICAgICAgICAgICAgIDxwaG90b3Nob3A6TGF5ZXJOYW1lPkhlYXBzPC9waG90b3Nob3A6TGF5ZXJOYW1lPgogICAgICAgICAgICAgICAgICA8cGhvdG9zaG9wOkxheWVyVGV4dD5IZWFwczwvcGhvdG9zaG9wOkxheWVyVGV4dD4KICAgICAgICAgICAgICAgPC9yZGY6bGk+CiAgICAgICAgICAgIDwvcmRmOkJhZz4KICAgICAgICAgPC9waG90b3Nob3A6VGV4dExheWVycz4KICAgICAgICAgPHhtcE1NOkluc3RhbmNlSUQ+eG1wLmlpZDo1YTkyZTY1ZC0yMjQxLTFhNDItODUyNi0xODRmMDU4NjZmMzA8L3htcE1NOkluc3RhbmNlSUQ+CiAgICAgICAgIDx4bXBNTTpEb2N1bWVudElEPnhtcC5kaWQ6N2EwYTg5M2ItYTkzZC1mNDRkLWJmMTktYzNhMjk5NTIxYmMzPC94bXBNTTpEb2N1bWVudElEPgogICAgICAgICA8eG1wTU06T3JpZ2luYWxEb2N1bWVudElEPnhtcC5kaWQ6N2EwYTg5M2ItYTkzZC1mNDRkLWJmMTktYzNhMjk5NTIxYmMzPC94bXBNTTpPcmlnaW5hbERvY3VtZW50SUQ+CiAgICAgICAgIDx4bXBNTTpIaXN0b3J5PgogICAgICAgICAgICA8cmRmOlNlcT4KICAgICAgICAgICAgICAgPHJkZjpsaSByZGY6cGFyc2VUeXBlPSJSZXNvdXJjZSI+CiAgICAgICAgICAgICAgICAgIDxzdEV2dDphY3Rpb24+Y3JlYXRlZDwvc3RFdnQ6YWN0aW9uPgogICAgICAgICAgICAgICAgICA8c3RFdnQ6aW5zdGFuY2VJRD54bXAuaWlkOjdhMGE4OTNiLWE5M2QtZjQ0ZC1iZjE5LWMzYTI5OTUyMWJjMzwvc3RFdnQ6aW5zdGFuY2VJRD4KICAgICAgICAgICAgICAgICAgPHN0RXZ0OndoZW4+MjAxNy0wMi0yMVQxNDo1ODowMSswMzowMDwvc3RFdnQ6d2hlbj4KICAgICAgICAgICAgICAgICAgPHN0RXZ0OnNvZnR3YXJlQWdlbnQ+QWRvYmUgUGhvdG9zaG9wIENDIDIwMTUuNSAoV2luZG93cyk8L3N0RXZ0OnNvZnR3YXJlQWdlbnQ+CiAgICAgICAgICAgICAgIDwvcmRmOmxpPgogICAgICAgICAgICAgICA8cmRmOmxpIHJkZjpwYXJzZVR5cGU9IlJlc291cmNlIj4KICAgICAgICAgICAgICAgICAgPHN0RXZ0OmFjdGlvbj5zYXZlZDwvc3RFdnQ6YWN0aW9uPgogICAgICAgICAgICAgICAgICA8c3RFdnQ6aW5zdGFuY2VJRD54bXAuaWlkOjVkZGJlNTRiLWJkYjYtOTA0YS1hMjkzLWMzZmY0MTkzYzFkMTwvc3RFdnQ6aW5zdGFuY2VJRD4KICAgICAgICAgICAgICAgICAgPHN0RXZ0OndoZW4+MjAxNy0wMi0yMVQxNTowNToxMiswMzowMDwvc3RFdnQ6d2hlbj4KICAgICAgICAgICAgICAgICAgPHN0RXZ0OnNvZnR3YXJlQWdlbnQ+QWRvYmUgUGhvdG9zaG9wIENDIDIwMTUuNSAoV2luZG93cyk8L3N0RXZ0OnNvZnR3YXJlQWdlbnQ+CiAgICAgICAgICAgICAgICAgIDxzdEV2dDpjaGFuZ2VkPi88L3N0RXZ0OmNoYW5nZWQ+CiAgICAgICAgICAgICAgIDwvcmRmOmxpPgogICAgICAgICAgICAgICA8cmRmOmxpIHJkZjpwYXJzZVR5cGU9IlJlc291cmNlIj4KICAgICAgICAgICAgICAgICAgPHN0RXZ0OmFjdGlvbj5zYXZlZDwvc3RFdnQ6YWN0aW9uPgogICAgICAgICAgICAgICAgICA8c3RFdnQ6aW5zdGFuY2VJRD54bXAuaWlkOjVhOTJlNjVkLTIyNDEtMWE0Mi04NTI2LTE4NGYwNTg2NmYzMDwvc3RFdnQ6aW5zdGFuY2VJRD4KICAgICAgICAgICAgICAgICAgPHN0RXZ0OndoZW4+MjAxNy0wMi0yMVQxNTowODo0OCswMzowMDwvc3RFdnQ6d2hlbj4KICAgICAgICAgICAgICAgICAgPHN0RXZ0OnNvZnR3YXJlQWdlbnQ+QWRvYmUgUGhvdG9zaG9wIENDIDIwMTUuNSAoV2luZG93cyk8L3N0RXZ0OnNvZnR3YXJlQWdlbnQ+CiAgICAgICAgICAgICAgICAgIDxzdEV2dDpjaGFuZ2VkPi88L3N0RXZ0OmNoYW5nZWQ+CiAgICAgICAgICAgICAgIDwvcmRmOmxpPgogICAgICAgICAgICA8L3JkZjpTZXE+CiAgICAgICAgIDwveG1wTU06SGlzdG9yeT4KICAgICAgICAgPHRpZmY6T3JpZW50YXRpb24+MTwvdGlmZjpPcmllbnRhdGlvbj4KICAgICAgICAgPHRpZmY6WFJlc29sdXRpb24+NzIwMDAwLzEwMDAwPC90aWZmOlhSZXNvbHV0aW9uPgogICAgICAgICA8dGlmZjpZUmVzb2x1dGlvbj43MjAwMDAvMTAwMDA8L3RpZmY6WVJlc29sdXRpb24+CiAgICAgICAgIDx0aWZmOlJlc29sdXRpb25Vbml0PjI8L3RpZmY6UmVzb2x1dGlvblVuaXQ+CiAgICAgICAgIDxleGlmOkNvbG9yU3BhY2U+NjU1MzU8L2V4aWY6Q29sb3JTcGFjZT4KICAgICAgICAgPGV4aWY6UGl4ZWxYRGltZW5zaW9uPjEwMDwvZXhpZjpQaXhlbFhEaW1lbnNpb24+CiAgICAgICAgIDxleGlmOlBpeGVsWURpbWVuc2lvbj4xMDA8L2V4aWY6UGl4ZWxZRGltZW5zaW9uPgogICAgICA8L3JkZjpEZXNjcmlwdGlvbj4KICAgPC9yZGY6UkRGPgo8L3g6eG1wbWV0YT4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAKPD94cGFja2V0IGVuZD0idyI/PqnStpkAAAAgY0hSTQAAeiUAAICDAAD5/wAAgOkAAHUwAADqYAAAOpgAABdvkl/FRgAABKlJREFUeNrsnUFym0oQhn9S3kc5gXknMDcwvoF8AuETWFpoLWnNwvYJJJ9AygmETxByA3IDcgLewk3eZDI9gJBBlff/VVRFIIae+Xp6ukdUHFRVBepy9IlDQCAUgRAIRSAEQhEIgVAEQiAUgVAEQiAUgRAIRSAEQhEIgVAEQhEIgVAEQiAUgRAIRSAEQhEIRSAEQnXTFQAgDVaOaz+wrHbeu9MgBDBzXHkDkHF4W2hZOYAAa8dXMwC7huZC5d41gTBkEQhFIARCEQjT3hEVA7g1Pn+X7Kzs2E4IIAJwc+bUOwQwBfAZwE9pL+9w/0Tsuv2tnHhvp7gkICsAczHYpR2ARQswsbQVK9dLAM8ANh47XGl74LmWiW15A4gVgMTTx0zsysYMWRMA36SjE8/3Evle2PCdowdG/by1tDXp6DBrjxMcxfNdiuR584ZnvreTBsmYQPaejrjCxd4DY9vhuZGnLSiFbZNj7ZXz2wZHsrVFGkzHAJI0eLM2kCtHp59OXK/iM/YnlFlg6rGDw5l6GgPISonxdxKz/1EWusT6PFVCwQ7AFzl2ig2zDvYuxC5fe48O21x9vDf6mDvhyiy58npUGpzrf6aZKtP42VjUClnktkoGVXfkWnnGxkgCFg6Q6DBD1mJbPaAPYkPUYFukOMrB6OODrDG2bgAchsqybpTzr9bng7I2xEan35QYX1hemTkAtI3tb4qtkRJWu6TCuZKO/xgy7dU8s3BMb5c+W+lihuGlDfq1ZVvsCLlfLZvvfv1L2X4fQ+WZF9mPVuZJPMxZFDuSkKOEro1WELYBUqDd7yFJj5rk2HOQIlmooxHhTqz1YqbYksiRA3jRxtYPZFltvKakQdwDSN9BWDnSzkvQnaSxc48TbcX+hbHgj1IYnrPAnF+wfQsBkzUWvmmwvZQ1pE1IdGU9vgIzNxKDqON2yUesOfUiP/NEkgRpUGJZLcYGUtcOXfWonL+3pn/TPtfQYDYSylzF4xxp8IJlVYwZssITPThSZsbhg+2NGrKv0NieqY/Iigj3Es7UXYRPA3qJVsF/ZI0wBJCfxoAerWOv7E5oDjoYkK/K+ZVnloQd0uLIkYWFPey91TzY42zflT7EnjT5j6J4qDUklyNyGPxN8vLcOHdrLIKJtfiXjk5FAvdN7l/1BLKW+1/lWVptURh2Z4pte1k/ciNdx9hbJ3UqeFS8yLedPrOAHJSMZd1hNrUJcUmLGst2lGeHHRM0/1xQ1m0NuahneN/p7KrY8rqXnutKeMZZv3FkjflJzrqsyjEKw11HKKVkJqU1EA89nnPT0s6mGureU6lnHfr3YL5DfeXJgvKWDWZaPPR0NpNYOlUWuVzi9w7uHeD6/JPl8XXY2BjhbXLCDHmVRMTV/gH+FzBKgZJA/wWx+FWbLKvCvBD0/usIaXCOeiRskSK3ub/rvdrLDKaXmxV/dmIfYwvGfxAuaPvdbeDw9w9R47QGyTcXL0wEQiAUgRAIRSB/ia7+5/1/hfsdrHwsgwL+2TyGLIpACIQiEAKhCIRAKAIhEIpAKAIhEIpACIQiEAKhCIRAKAKhCIRAKAIhEIpACIQiEAKhCIT6U/8OAPx1FIcYXJybAAAAAElFTkSuQmCC"}];
 var __map_reserved = {};
 haxe_MainLoop.add(hxd_System.updateCursor,-1);
 var ArrayBuffer = $global.ArrayBuffer || js_html_compat_ArrayBuffer;
@@ -25681,7 +29506,7 @@ if(ArrayBuffer.prototype.slice == null) {
 var DataView = $global.DataView || js_html_compat_DataView;
 var Float32Array = $global.Float32Array || js_html_compat_Float32Array._new;
 var Uint8Array = $global.Uint8Array || js_html_compat_Uint8Array._new;
-Fractals.I = 1000;
+Global.id = "heaps";
 Protean.id = "heaps";
 h3d_Buffer.GUID = 0;
 h3d_impl_GlDriver.TFILTERS = [[[9728,9728],[9729,9729]],[[9728,9984],[9729,9985]],[[9728,9986],[9729,9987]]];
@@ -25749,8 +29574,15 @@ haxe_EntryPoint.pending = [];
 haxe_EntryPoint.threadCount = 0;
 haxe_Unserializer.DEFAULT_RESOLVER = new haxe__$Unserializer_DefaultResolver();
 haxe_Unserializer.BASE64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789%:";
+haxe_crypto_Base64.CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+haxe_crypto_Base64.BYTES = haxe_io_Bytes.ofString(haxe_crypto_Base64.CHARS);
 haxe_ds_ObjectMap.count = 0;
 haxe_io_FPHelper.i64tmp = new haxe__$Int64__$_$_$Int64(0,0);
+haxe_zip_InflateImpl.LEN_EXTRA_BITS_TBL = [0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,4,4,4,4,5,5,5,5,0,-1,-1];
+haxe_zip_InflateImpl.LEN_BASE_VAL_TBL = [3,4,5,6,7,8,9,10,11,13,15,17,19,23,27,31,35,43,51,59,67,83,99,115,131,163,195,227,258];
+haxe_zip_InflateImpl.DIST_EXTRA_BITS_TBL = [0,0,0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9,10,10,11,11,12,12,13,13,-1,-1];
+haxe_zip_InflateImpl.DIST_BASE_VAL_TBL = [1,2,3,4,5,7,9,13,17,25,33,49,65,97,129,193,257,385,513,769,1025,1537,2049,3073,4097,6145,8193,12289,16385,24577];
+haxe_zip_InflateImpl.CODE_LENGTHS_POS = [16,17,18,0,8,7,9,6,10,5,11,4,12,3,13,2,14,1,15];
 hxd_Key.initDone = false;
 hxd_Key.keyPressed = [];
 hxd_Key.ALLOW_KEY_REPEAT = false;
@@ -25764,6 +29596,7 @@ hxd_Timer.dt = 1 / hxd_Timer.wantedFPS;
 hxd_Timer.currentDT = 1 / hxd_Timer.wantedFPS;
 hxd_System.setCursor = hxd_System.setNativeCursor;
 hxd_System.loopInit = false;
+hxd_fs_EmbedFileSystem.invalidChars = new EReg("[^A-Za-z0-9_]","g");
 hxd_prefab_Library.registeredElements = new haxe_ds_StringMap();
 hxd_prefab_Library.registeredExtensions = new haxe_ds_StringMap();
 hxd_prefab_Library._ = hxd_prefab_Library.register("prefab",hxd_prefab_Library,"prefab");
@@ -25838,7 +29671,7 @@ hxsl_SharedShader.UNROLL_LOOPS = false;
 js_html_compat_Float32Array.BYTES_PER_ELEMENT = 4;
 js_html_compat_Uint8Array.BYTES_PER_ELEMENT = 1;
 {
-	Fractals.main();
+	Test.main();
 	haxe_EntryPoint.run();
 }
 })(typeof window != "undefined" ? window : typeof global != "undefined" ? global : typeof self != "undefined" ? self : this);
