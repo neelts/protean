@@ -1,6 +1,7 @@
 # protean
 
-Protean. One code base for different 2d engines. Proof of concept.
+2D Cross-Engine library.
+Proof of concept.
 
 Currently supports:
 - Heaps 1.5.0
