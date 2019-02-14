@@ -1,4 +1,3 @@
 package protean.display;
-class DisplayObject {
-	
-}
+import display.PDisplayObject;
+typedef DisplayObject = PDisplayObject;

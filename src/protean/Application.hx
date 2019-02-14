@@ -1,5 +1,4 @@
 package protean;
-import Protean;
 #if js
 import js.html.CanvasElement;
 import js.html.Element;

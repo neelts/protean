@@ -37,7 +37,6 @@ class Test extends Application {
 		trace(c.get());
 		trace(c.getByName("shape"));
 		trace(c.getAt(0));
-		//trace(c.swap())
 		i.addTo(this);
 		trace([s.getX(), s.getY(), s.getScaleX(), s.getScaleY(), s.getScaling(), s.getRotation()]);
 	}

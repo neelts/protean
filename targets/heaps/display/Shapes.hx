@@ -8,4 +8,12 @@ class Shapes {
 		shape.drawRect(x, y, width, height);
 		return shape;
 	}
+	public static inline function fillStart(shape:PShape, color:Int = 0xff0000, alpha:Float = 1):PShape {
+		shape.beginFill(color, alpha);
+		return shape;
+	}
+	public static inline function fillEnd(shape:PShape):PShape {
+		shape.endFill();
+		return shape;
+	}
 }

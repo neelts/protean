@@ -9,4 +9,5 @@ class Containers {
 	public static inline function getByName(container:PContainer, name:String):PDisplayObject {}
 	public static inline function getAt(container:PContainer, index:UInt):PDisplayObject {}
 	public static inline function swap(container:PContainer, index:UInt):Array<PDisplayObject> {}
+	public static inline function getCount(container:PContainer):Int {}
 }

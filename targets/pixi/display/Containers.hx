@@ -54,4 +54,8 @@ class Containers {
 		return cast container.getChildAt(index);
 	}
 
+	public static inline function getCount<T:PContainer>(container:T):Int {
+		return container.children.length;
+	}
+
 }
