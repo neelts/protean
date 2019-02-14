@@ -18,7 +18,6 @@ class PApplication extends PContainer {
 	}
 
 	private function started():Void {
-		hxd.Res.initEmbed();
 		app = new PApp(init);
 	}
 

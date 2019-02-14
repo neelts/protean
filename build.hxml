@@ -44,7 +44,6 @@
 # Heaps
 
 --next
--D resourcesPath=bin/assets
 -D target=heaps
 -cp targets/heaps
 -lib heaps:1.5.0
